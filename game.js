@@ -50,12 +50,17 @@
   var gaps = [];       // {a,b} world x gap ranges
   var stars = [];      // {x,y,c,p}
   var cursor = 0;      // generation cursor (world x)
+  var hazards = [];    // enemies/hazards {type, wx, ...}
+  var shots = [];      // projectiles {wx, y}
+  var lastHazardX = 0; // spacing control
+  var hiJump = false;  // high-jump landing shake flag
+  var firstRoller = false; // guaranteed intro enemy
 
   var ux = 90;         // unicorn screen x (left third)
   var uy = 0;          // unicorn body-center y
   var vy = 0;
   var grounded = true;
-  var feet = 17;       // body center -> feet distance
+  var feet = 20;       // body center -> feet distance
   var rot = 0;         // flip rotation
   var flip = false;
   var charging = 0;    // 0..1 charge
@@ -69,6 +74,8 @@
   var shake = 0;
   var time = 0;
   var trail = [];     // high-jump trail points
+  var camOffY = 0;    // vertical camera offset (world follows the unicorn)
+  var GROUND_ANCHOR = 0.62; // where the unicorn's feet rest on screen (fraction of H)
 
   // ---------- Audio (procedural) ----------
   var AC = null;
@@ -94,12 +101,13 @@
   function sLand() { beep(150, 0.07, "sine", 0.05, 90); }
   function sDeath() { beep(220, 0.5, "sawtooth", 0.08, 60); }
   function sFlip() { beep(660, 0.12, "triangle", 0.04, 990); }
+  function sBolt() { beep(200, 0.18, "sawtooth", 0.05, 80); }
 
   // ---------- Terrain ----------
   function difficulty() { return Math.min(1, meters / 2500); }
 
   function terrainYAt(wx) {
-    var amp = 1 + difficulty() * 1.4;
+    var amp = 1 + difficulty() * 0.5;
     var base = H * 0.66;
     base += Math.sin(wx * 0.012) * 22 * amp;
     base += Math.sin(wx * 0.027 + 1.3) * 12 * amp;
@@ -116,36 +124,71 @@
   function addStar(x, y) { stars.push({ x: x, y: y, c: false, p: Math.random() * 6.28 }); }
 
   function placeStars(a, b) {
-    var mid = (a + b) / 2;
-    var gy = terrainYAt(mid) - 28;
     var t = Math.random();
-    if (t < 0.4) { // ground row
+    if (t < 0.4) { // ground row — hug the surface at each star's own x
       var n = 3 + (Math.random() * 3 | 0), st = (b - a) / n;
-      for (var i = 0; i < n; i++) addStar(a + st * (i + 0.5), gy);
-    } else if (t < 0.75) { // arc
-      var m = 5, s2 = (b - a) / m, h = 36 + Math.random() * 46;
+      for (var i = 0; i < n; i++) {
+        var x = a + st * (i + 0.5);
+        addStar(x, terrainYAt(x) - 28);
+      }
+    } else if (t < 0.75) { // arc — capped so it stays reachable
+      var m = 5, s2 = (b - a) / m, h = Math.min(150, 40 + Math.random() * 60);
       for (var j = 0; j < m; j++) {
         var tt = j / (m - 1);
-        addStar(a + s2 * j, gy - Math.sin(tt * Math.PI) * h);
+        var ax = a + s2 * j;
+        addStar(ax, terrainYAt(ax) - 26 - Math.sin(tt * Math.PI) * h);
       }
     } else { // single high
-      addStar(mid, gy - 34 - Math.random() * 22);
+      var sx2 = (a + b) / 2;
+      addStar(sx2, terrainYAt(sx2) - 40 - Math.random() * 22);
     }
+  }
+
+  function stageAllows(t) {
+    if (t === 1) return meters >= 180;
+    if (t === 2) return meters >= 450;
+    if (t === 3) return meters >= 900;
+    if (t === 4) return meters >= 1400;
+    if (t === 5) return meters >= 450;
+    return false;
+  }
+  function spawnHazard(ty, wx) {
+    if (ty === 1) hazards.push({ type: 1, wx: wx, rot: 0 });
+    else if (ty === 2) hazards.push({ type: 2, wx: wx, phase: Math.random() * 6.28, spd: 3 + Math.random() * 2, amp: 36 + Math.random() * 30, base: terrainYAt(wx) });
+    else if (ty === 3) hazards.push({ type: 3, wx: wx, y: terrainYAt(wx) - rand(70, 130), cd: rand(0.6, 1.4) });
+    else if (ty === 4) hazards.push({ type: 4, wx: wx, y: terrainYAt(wx) - rand(150, 210), st: "idle", tm: rand(1.2, 2.2) });
+  }
+  function maybeSpawnHazard(a, b) {
+    var opts = [];
+    if (stageAllows(1)) opts.push(1);
+    if (stageAllows(2)) opts.push(2);
+    if (stageAllows(3)) opts.push(3);
+    if (stageAllows(4)) opts.push(4);
+    if (!opts.length) return;
+    if (Math.random() > 0.7) return;
+    var wx = (a + b) / 2 + rand(-(b - a) * 0.18, (b - a) * 0.18);
+    if (lastHazardX && wx - lastHazardX < 160) return;
+    spawnHazard(opts[(Math.random() * opts.length) | 0], wx);
+    lastHazardX = wx;
   }
 
   function genAhead() {
     while (cursor < camX + W + 360) {
-      var solid = rand(230, 380) - difficulty() * 90;
-      solid = Math.max(140, solid);
+      var solid = rand(280, 460) - difficulty() * 60;
+      solid = Math.max(180, solid);
       placeStars(cursor, cursor + solid);
+      maybeSpawnHazard(cursor, cursor + solid);
       cursor += solid;
-      var gapChance = 0.45 + Math.min(0.45, meters / 4000);
-      if (cursor > 600 && Math.random() < gapChance) {
-        var gl = 34 + Math.min(140, meters * 0.03 + rand(0, 36));
+      var gapChance = 0.28 + Math.min(0.32, meters / 6000);
+      if (cursor > 2000 && Math.random() < gapChance) {
+        var gl = 52 + Math.min(150, meters * 0.045 + rand(0, 40));
         var a = cursor, b = cursor + gl;
         gaps.push({ a: a, b: b });
-        if (Math.random() < 0.55) {
-          addStar((a + b) / 2, terrainYAt(a) - 96 - rand(0, 30)); // high-risk star
+        if (Math.random() < 0.6) {
+          addStar((a + b) / 2, terrainYAt(a) - 110 - rand(0, 30)); // high-risk star
+        }
+        if (stageAllows(5) && Math.random() < 0.45) {
+          hazards.push({ type: 5, wx: b, len: 34 + Math.random() * 30 }); // spike at landing edge
         }
         cursor += gl;
       }
@@ -153,6 +196,7 @@
     // prune behind
     while (gaps.length && gaps[0].b < camX - 60) gaps.shift();
     while (stars.length && stars[0].x < camX - 60) stars.shift();
+    while (hazards.length && (hazards[0].wx < camX - 80 || hazards[0].wx > camX + W + 900)) hazards.shift();
   }
 
   // ---------- Particles ----------
@@ -319,10 +363,19 @@
       var rot = time * 1.5 + s.p;
       ctx.save();
       ctx.shadowColor = "#FFE45E"; ctx.shadowBlur = 12;
-      ctx.fillStyle = "rgba(255,228,94,0.25)";
-      drawStarShape(sx, s.y, r * 1.9, rot); ctx.fill();
+      ctx.fillStyle = "rgba(255,228,94,0.22)";
+      drawStarShape(sx, s.y, r * 2.0, rot); ctx.fill();
+      // crisp body
       ctx.fillStyle = "#FFE45E";
       drawStarShape(sx, s.y, r, rot); ctx.fill();
+      // outline for readability
+      ctx.lineJoin = "round";
+      ctx.lineWidth = 1.4;
+      ctx.strokeStyle = "rgba(255,255,255,0.92)";
+      drawStarShape(sx, s.y, r, rot); ctx.stroke();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = "rgba(122,44,118,0.9)";
+      drawStarShape(sx, s.y, r * 1.45, rot + 0.2); ctx.stroke();
       ctx.restore();
     }
   }
@@ -339,70 +392,90 @@
     ctx.rotate(rot);
     ctx.scale(sq, sy);
 
-    // tail
-    ctx.strokeStyle = MANE[3]; ctx.lineWidth = 3; ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.moveTo(-20, -2);
-    ctx.quadraticCurveTo(-32, -8 + Math.sin(runPhase) * 3, -30, 6);
-    ctx.stroke();
-    ctx.strokeStyle = MANE[4];
-    ctx.beginPath();
-    ctx.moveTo(-20, 2);
-    ctx.quadraticCurveTo(-30, 0, -26, 12);
-    ctx.stroke();
-
-    // legs
-    var lg = Math.sin(runPhase) * 5;
-    var lg2 = Math.sin(runPhase + Math.PI) * 5;
-    ctx.strokeStyle = SHAD; ctx.lineWidth = 4; ctx.lineCap = "round";
-    leg(-12, 10, lg); leg(-4, 10, lg2); leg(8, 10, lg); leg(14, 10, lg2);
-
-    // body
-    ctx.fillStyle = BODY;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, 22, 14, 0, 0, 6.2832);
-    ctx.fill();
-
-    // shadow side
-    ctx.fillStyle = SHAD;
-    ctx.beginPath();
-    ctx.ellipse(2, 4, 20, 9, 0, 0, 6.2832);
-    ctx.fill();
-
-    // mane
-    ctx.lineWidth = 3; ctx.lineCap = "round";
-    for (var m = 0; m < MANE.length; m++) {
-      ctx.strokeStyle = MANE[m];
+    // tail — two clean flowing strands behind the rump
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    for (var ti = 0; ti < 2; ti++) {
+      ctx.strokeStyle = MANE[ti + 2];
+      ctx.lineWidth = 3.4;
+      var tw = Math.sin(time * 9 + ti * 1.4) * 3;
       ctx.beginPath();
-      var mx = 6 - m * 1.5;
-      ctx.moveTo(mx, -10);
-      ctx.quadraticCurveTo(mx + 6, -16 - m, mx + 2, -2 - m);
+      ctx.moveTo(-22, -2 - ti * 2);
+      ctx.quadraticCurveTo(-34 - ti * 2, -4 + tw, -39 - ti * 3, 12 + tw);
       ctx.stroke();
     }
 
-    // head
+    // legs — rounded with a run cycle
+    var lg = Math.sin(runPhase) * 4.5;
+    var lg2 = Math.sin(runPhase + Math.PI) * 4.5;
+    legShape(-13, lg); legShape(-4, lg2); legShape(9, lg); legShape(17, lg2);
+
+    // body — smooth capsule
     ctx.fillStyle = BODY;
-    ctx.beginPath(); ctx.ellipse(18, -8, 10, 8, 0, 0, 6.2832); ctx.fill();
-    // ear
+    roundRect(-24, -11, 48, 22, 11); ctx.fill();
+    // soft belly shade
+    ctx.fillStyle = SHAD;
+    roundRect(-20, 5, 40, 6, 3); ctx.fill();
+
+    // neck — smooth wedge flowing into the head
     ctx.fillStyle = BODY;
-    ctx.beginPath(); ctx.moveTo(14, -14); ctx.lineTo(17, -22); ctx.lineTo(20, -14); ctx.closePath(); ctx.fill();
-    // horn
+    ctx.beginPath();
+    ctx.moveTo(14, -6);
+    ctx.quadraticCurveTo(20, -16, 27, -19);
+    ctx.lineTo(31, -10);
+    ctx.quadraticCurveTo(22, -2, 16, 3);
+    ctx.closePath();
+    ctx.fill();
+
+    // mane — three clean wind-blown strands
+    for (var m = 0; m < 3; m++) {
+      ctx.strokeStyle = MANE[m];
+      ctx.lineWidth = 3.4; ctx.lineCap = "round";
+      var w = Math.sin(time * 9 + m * 0.9) * 3.5;
+      ctx.beginPath();
+      ctx.moveTo(24 - m * 0.6, -19 - m * 0.4);
+      ctx.quadraticCurveTo(10 - m, -25 + w, -9 - m * 1.5, -9 + w * 0.5);
+      ctx.stroke();
+    }
+
+    // head — tilted forward; horn + ear follow the head angle
+    var headAngle = 0.12;
     ctx.save();
-    ctx.shadowColor = HORN; ctx.shadowBlur = 8;
-    ctx.fillStyle = HORN;
-    ctx.beginPath(); ctx.moveTo(20, -16); ctx.lineTo(23, -30); ctx.lineTo(26, -15); ctx.closePath(); ctx.fill();
+    ctx.translate(27, -19);
+    ctx.rotate(headAngle);
+    ctx.fillStyle = BODY;
+    ctx.beginPath(); ctx.ellipse(4, 0, 10, 6.5, 0, 0, 6.2832); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(13, 2.5, 6, 4, 0, 0, 6.2832); ctx.fill();
+    // ear
+    ctx.beginPath(); ctx.moveTo(-1, -6); ctx.lineTo(-2, -14); ctx.lineTo(4, -7); ctx.closePath(); ctx.fill();
+    // forelock
+    ctx.strokeStyle = MANE[1]; ctx.lineWidth = 2.4; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(1, -6); ctx.quadraticCurveTo(-3, -12, 3, -14); ctx.stroke();
+    // horn — points up-forward, rotates with the head
+    ctx.save();
+    ctx.shadowColor = HORN; ctx.shadowBlur = 10; ctx.fillStyle = HORN;
+    ctx.beginPath(); ctx.moveTo(2, -4); ctx.lineTo(7, -19); ctx.lineTo(11, -3); ctx.closePath(); ctx.fill();
     ctx.restore();
-    // eye
+    // eye + highlight
     ctx.fillStyle = EYE;
-    ctx.beginPath(); ctx.arc(22, -8, 1.8, 0, 6.2832); ctx.fill();
+    ctx.beginPath(); ctx.arc(7, -1, 1.6, 0, 6.2832); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    ctx.beginPath(); ctx.arc(7.6, -1.6, 0.6, 0, 6.2832); ctx.fill();
+    // nostril
+    ctx.fillStyle = SHAD;
+    ctx.beginPath(); ctx.arc(17, 3, 1, 0, 6.2832); ctx.fill();
+    ctx.restore();
 
     ctx.restore();
   }
-  function leg(x, y, sw) {
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x + sw * 0.4, y + 12);
-    ctx.stroke();
+  function legShape(x, sw) {
+    ctx.save();
+    ctx.translate(x, 8);
+    ctx.rotate(sw * 0.05);
+    ctx.fillStyle = SHAD;
+    roundRect(-2.5, 0, 5, 12, 2.5); ctx.fill();
+    ctx.fillStyle = EYE;
+    roundRect(-2.5, 10, 5, 2.5, 1.2); ctx.fill(); // hoof
+    ctx.restore();
   }
 
   // ---------- Input ----------
@@ -421,6 +494,7 @@
     vy = lerp(-380, -780, p);
     grounded = false;
     flip = p > 0.55;
+    hiJump = p > 0.55;
     airT = 0; airDur = 2 * Math.abs(vy) / 1400;
     rot = 0;
     sJump(p);
@@ -445,6 +519,7 @@
     state = "play";
     camX = 0; speed = 200; meters = 0; dist = 0; starsGot = 0;
     gaps.length = 0; stars.length = 0; parts.length = 0; trail.length = 0;
+    hazards.length = 0; shots.length = 0; lastHazardX = 0; hiJump = false; firstRoller = false;
     cursor = -50; uy = terrainYAt(0) - feet; vy = 0; grounded = true;
     rot = 0; flip = false; charging = 0; chargeT = 0; landSq = 0;
     dead = false; deadT = 0; shake = 0;
@@ -473,9 +548,12 @@
     if (shake > 0) shake = Math.max(0, shake - dt * 30);
 
     if (state !== "play") {
-      // idle bob on title/over
-      uy = terrainYAt(camX0()) - feet + Math.sin(time * 2) * 1.5;
+      if (state === "title") {
+        uy = terrainYAt(camX0()) - feet + Math.sin(time * 2) * 1.5; // idle bob
+      }
+      // on "over" the unicorn stays where it fell (beside the broken rainbow)
       runPhase += dt * 8;
+      updateCamera(dt);
       updateParts(dt);
       return;
     }
@@ -487,11 +565,16 @@
     }
 
     // speed & distance
-    speed = Math.min(540, 200 + meters * 0.14);
+    speed = Math.min(560, 200 + meters * 0.18);
     camX += speed * dt;
     meters = camX / 24;
     dist = Math.floor(meters);
     genAhead();
+    // guarantee the player meets at least one enemy early, so they learn hazards exist
+    if (!firstRoller && meters >= 140) {
+      spawnHazard(1, camX + W * 0.6);
+      firstRoller = true;
+    }
 
     // physics
     if (!grounded) {
@@ -503,14 +586,16 @@
         if (Math.random() < 0.5) spawn(ux, uy - 4, 1, { c: MANE[(Math.random() * 5) | 0], sp0: 10, sp1: 40, life: 0.4, g: 0, sh: 4 });
       }
       var gy = terrainYAt(camX);
-      if (!inGap(camX) && vy > 0 && uy + feet >= gy && uy + feet <= gy + 42) {
+      var tol = 26 + (1 - difficulty()) * 16; // forgiving early, strict late
+      if (!inGap(camX) && vy > 0 && uy + feet >= gy && uy + feet <= gy + tol) {
         // land
         uy = gy - feet; vy = 0; grounded = true; rot = 0; flip = false;
+        if (hiJump) { shake = 4; hiJump = false; }
         landSq = 1; sLand();
         spawn(ux, uy + feet, 8, { c: "#ffffff", sp0: 40, sp1: 120, life: 0.35, g: 200, ang: -1.57, spread: 1.1 });
       }
-      // high-jump trail
-      if (vy < -120) { trail.push({ x: ux, y: uy, life: 0.4 }); }
+      // high-jump trail (stored in world space so it flows left with travel)
+      if (vy < -120) { trail.push({ wx: camX, y: uy, life: 0.45 }); }
     } else {
       // grounded: hug terrain
       var g = terrainYAt(camX);
@@ -542,21 +627,88 @@
       }
     }
 
+    // hazards
+    updateHazards(dt);
+    if (checkHazards()) gameOver();
+
     // death
     if (uy > H + 40) gameOver();
 
+    updateCamera(dt);
     updateParts(dt);
+  }
+  // vertical camera: the world follows the unicorn so jumps feel like forward motion
+  function updateCamera(dt) {
+    var anchor = H * GROUND_ANCHOR;
+    var target = anchor - (uy + feet);
+    target = clamp(target, -H * 0.22, H * 0.4);
+    camOffY += (target - camOffY) * Math.min(1, dt * 5);
   }
   // helper for idle bob so it references a stable ground
   function camX0() { return state === "play" ? camX : 0; }
+
+  // ---------- Hazards ----------
+  function updateHazards(dt) {
+    for (var i = hazards.length - 1; i >= 0; i--) {
+      var h = hazards[i];
+      if (h.type === 1) {
+        h.rot -= (speed + 60) * dt / 16; // roll LEFT (toward player) as it travels
+        h.wx -= 60 * dt; // drift slowly toward the player
+      } else if (h.type === 3) {
+        h.cd -= dt;
+        var sx = ux + (h.wx - camX);
+        if (h.cd <= 0 && sx > 0 && sx < W) {
+          shots.push({ wx: h.wx - 12, y: h.y });
+          h.cd = rand(1.4, 2.4);
+        }
+      } else if (h.type === 4) {
+        h.tm -= dt;
+        if (h.st === "idle") { if (h.tm <= 0) { h.st = "warn"; h.tm = 0.6; } }
+        else if (h.st === "warn") { if (h.tm <= 0) { h.st = "strike"; h.tm = 0.25; sBolt(); } }
+        else if (h.st === "strike") { if (h.tm <= 0) { h.st = "idle"; h.tm = rand(1.4, 2.4); } }
+      }
+      if (h.wx < camX - 80) hazards.splice(i, 1);
+    }
+    for (var j = shots.length - 1; j >= 0; j--) {
+      shots[j].wx -= 230 * dt;
+      if (shots[j].wx < camX - 40) shots.splice(j, 1);
+    }
+  }
+  function checkHazards() {
+    var R = 12; // unicorn hit radius (smaller than visual = fair)
+    for (var i = 0; i < hazards.length; i++) {
+      var h = hazards[i], sx = ux + (h.wx - camX);
+      if (sx < -40 || sx > W + 40) continue;
+      if (h.type === 1) {
+        var ry = terrainYAt(h.wx) - 15;
+        if (Math.abs(ux - sx) < 14 + R && Math.abs(uy - ry) < 14 + R) return true;
+      } else if (h.type === 2) {
+        var hy = h.base - 30 + Math.sin(time * h.spd + h.phase) * h.amp;
+        if ((ux - sx) * (ux - sx) + (uy - hy) * (uy - hy) < (R + 9) * (R + 9)) return true;
+      } else if (h.type === 3) {
+        if ((ux - sx) * (ux - sx) + (uy - h.y) * (uy - h.y) < (R + 9) * (R + 9)) return true;
+      } else if (h.type === 4 && h.st === "strike") {
+        var top = h.y + 10, bot = terrainYAt(h.wx) - 34;
+        if (Math.abs(ux - sx) < 8 + R && uy > top - 30 && uy < bot) return true;
+      } else if (h.type === 5) {
+        var sy = terrainYAt(h.wx);
+        if (Math.abs(ux - sx) < 8 + R && uy > sy - 2 && uy < sy + h.len) return true;
+      }
+    }
+    for (var k = 0; k < shots.length; k++) {
+      var sh = shots[k], ssx = ux + (sh.wx - camX);
+      if ((ux - ssx) * (ux - ssx) + (uy - sh.y) * (uy - sh.y) < (R + 5) * (R + 5)) return true;
+    }
+    return false;
+  }
 
   // ---------- UI ----------
   function drawTrail() {
     for (var i = 0; i < trail.length; i++) {
       var t = trail[i];
-      ctx.globalAlpha = clamp(t.life / 0.4, 0, 1) * 0.5;
+      ctx.globalAlpha = clamp(t.life / 0.45, 0, 1) * 0.5;
       ctx.fillStyle = RNB[(i + (time * 10 | 0)) % RNB.length];
-      ctx.beginPath(); ctx.arc(t.x, t.y, 6, 0, 6.2832); ctx.fill();
+      ctx.beginPath(); ctx.arc(ux + (t.wx - camX), t.y, 5, 0, 6.2832); ctx.fill();
     }
     ctx.globalAlpha = 1;
   }
@@ -639,6 +791,140 @@
     ctx.textAlign = "left";
   }
 
+  // ---------- Hazard drawing ----------
+  function drawHazards() {
+    for (var i = 0; i < hazards.length; i++) {
+      var h = hazards[i], sx = ux + (h.wx - camX);
+      if (sx < -60 || sx > W + 60) continue;
+      if (h.type === 1) drawRoller(sx, terrainYAt(h.wx) - 15, h.rot);
+      else if (h.type === 2) { var hy = h.base - 30 + Math.sin(time * h.spd + h.phase) * h.amp; drawHopper(sx, hy); }
+      else if (h.type === 3) drawShooter(sx, h.y);
+      else if (h.type === 4) drawStorm(sx, h.y, h.st, h.wx);
+      else if (h.type === 5) drawSpikes(sx, terrainYAt(h.wx), h.len);
+    }
+  }
+  function drawShots() {
+    for (var i = 0; i < shots.length; i++) {
+      var sh = shots[i], sx = ux + (sh.wx - camX);
+      ctx.save();
+      ctx.shadowColor = "#FF5DFF"; ctx.shadowBlur = 12;
+      ctx.fillStyle = "#FF5DFF"; ctx.beginPath(); ctx.arc(sx, sh.y, 5, 0, 6.2832); ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = "rgba(255,93,255,0.28)"; ctx.beginPath(); ctx.arc(sx + 7, sh.y, 8, 0, 6.2832); ctx.fill();
+      ctx.restore();
+    }
+  }
+  function drawRoller(x, y, rot) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(rot);
+    ctx.lineJoin = "round";
+    // big cartoon spikes with dark outlines, radiating from the ball
+    for (var k = 0; k < 8; k++) {
+      var a = k / 8 * 6.2832;
+      var b0x = Math.cos(a - 0.18) * 14, b0y = Math.sin(a - 0.18) * 14;
+      var b1x = Math.cos(a + 0.18) * 14, b1y = Math.sin(a + 0.18) * 14;
+      var tx = Math.cos(a) * 28, ty = Math.sin(a) * 28;
+      ctx.beginPath();
+      ctx.moveTo(b0x, b0y); ctx.lineTo(tx, ty); ctx.lineTo(b1x, b1y); ctx.closePath();
+      ctx.fillStyle = "#C77DFF"; ctx.fill();
+      ctx.lineWidth = 2.6; ctx.strokeStyle = "#241338"; ctx.stroke();
+    }
+    // ball body with thick cartoon outline
+    ctx.beginPath(); ctx.arc(0, 0, 16, 0, 6.2832);
+    ctx.fillStyle = "#7A43B8"; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = "#241338"; ctx.stroke();
+    // glossy highlight
+    ctx.beginPath(); ctx.arc(-5, -5, 6, 0, 6.2832);
+    ctx.fillStyle = "rgba(255,255,255,0.55)"; ctx.fill();
+    ctx.restore();
+  }
+  function drawHopper(x, y) {
+    ctx.save();
+    ctx.shadowColor = "#D95CFF"; ctx.shadowBlur = 12;
+    ctx.fillStyle = "#B84DFF"; ctx.beginPath(); ctx.ellipse(x, y, 11, 13, 0, 0, 6.2832); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#E47CFF"; ctx.beginPath(); ctx.ellipse(x - 3, y - 4, 5, 6, 0, 0, 6.2832); ctx.fill();
+    ctx.strokeStyle = "#7026B5"; ctx.lineWidth = 2; ctx.lineCap = "round";
+    for (var t = -2; t <= 2; t++) {
+      ctx.beginPath(); ctx.moveTo(x + t * 3, y + 11);
+      ctx.lineTo(x + t * 3 + Math.sin(time * 8 + t) * 3, y + 18); ctx.stroke();
+    }
+    ctx.fillStyle = "#24133F";
+    ctx.beginPath(); ctx.arc(x - 3, y - 2, 1.6, 0, 6.2832); ctx.arc(x + 3, y - 2, 1.6, 0, 6.2832); ctx.fill();
+    ctx.restore();
+  }
+  function drawShooter(x, y) {
+    ctx.save();
+    ctx.shadowColor = "#C45CFF"; ctx.shadowBlur = 12;
+    ctx.fillStyle = "#33205F"; ctx.beginPath(); ctx.arc(x, y, 12, 0, 6.2832); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#6335A8"; ctx.beginPath(); ctx.arc(x - 3, y - 3, 5, 0, 6.2832); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x - 10, y); ctx.lineTo(x - 18, y - 6); ctx.lineTo(x - 12, y + 4); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#FFFFFF"; ctx.beginPath(); ctx.arc(x + 2, y, 4, 0, 6.2832); ctx.fill();
+    ctx.fillStyle = "#FF5DFF"; ctx.beginPath(); ctx.arc(x + 2, y, 2, 0, 6.2832); ctx.fill();
+    ctx.restore();
+  }
+  function drawStorm(x, y, st, wx) {
+    ctx.save();
+    ctx.fillStyle = "#35205F";
+    ctx.beginPath();
+    ctx.arc(x, y, 16, 0, 6.2832); ctx.arc(x + 16, y - 4, 18, 0, 6.2832);
+    ctx.arc(x + 34, y, 15, 0, 6.2832); ctx.arc(x + 16, y + 6, 17, 0, 6.2832); ctx.fill();
+    ctx.fillStyle = "#56327A"; ctx.beginPath(); ctx.arc(x + 14, y - 4, 10, 0, 6.2832); ctx.fill();
+    if (st === "warn") {
+      ctx.fillStyle = "rgba(255,228,94," + (0.25 + 0.3 * Math.abs(Math.sin(time * 18))) + ")";
+      ctx.fillRect(x + 14 - 3, y + 12, 6, terrainYAt(wx) - 34 - (y + 12));
+    } else if (st === "strike") {
+      ctx.strokeStyle = "#FFE45E"; ctx.lineWidth = 4; ctx.lineCap = "round";
+      ctx.shadowColor = "#FFF1A3"; ctx.shadowBlur = 16;
+      ctx.beginPath();
+      var lx = x + 16, ly = y + 12, by = terrainYAt(wx) - 34;
+      ctx.moveTo(lx, ly);
+      for (var s = 1; s <= 5; s++) {
+        var ny = ly + (by - ly) * (s / 5);
+        ctx.lineTo(lx + (s % 2 ? 8 : -8), ny);
+      }
+      ctx.stroke(); ctx.shadowBlur = 0;
+    }
+    ctx.restore();
+  }
+  function drawSpikes(x, sy, len) {
+    ctx.save();
+    ctx.shadowColor = "#C85CFF"; ctx.shadowBlur = 10;
+    ctx.fillStyle = "#B95CFF";
+    ctx.beginPath(); ctx.moveTo(x - 9, sy); ctx.lineTo(x + 9, sy); ctx.lineTo(x, sy + len); ctx.closePath(); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#F1B3FF";
+    ctx.beginPath(); ctx.moveTo(x - 3, sy); ctx.lineTo(x + 3, sy); ctx.lineTo(x, sy + len * 0.7); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+  function chargingColor(c) {
+    if (c < 0.33) return "#FF4FA3";
+    if (c < 0.66) return "#FF9A3C";
+    if (c < 0.9) return "#4DE8FF";
+    return "#FFFFFF";
+  }
+  function drawJumpMeter() {
+    if (charging <= 0.001) return; // only while charging
+    var hy = uy + camOffY;                 // horse feet in screen space
+    var bw = 12, bh = 120, bx = ux - 56, by = hy - bh - 8;
+    // track
+    ctx.fillStyle = "rgba(0,0,0,0.35)"; roundRect(bx, by, bw, bh, 6); ctx.fill();
+    // fill bottom-up by charge (jump height)
+    var fh = bh * clamp(charging, 0, 1);
+    var c = chargingColor(charging);
+    ctx.fillStyle = c;
+    if (charging > 0.9) { ctx.shadowColor = "#fff"; ctx.shadowBlur = 12; }
+    roundRect(bx, by + (bh - fh), bw, fh, 6); ctx.fill();
+    ctx.shadowBlur = 0;
+    if (charging > 0.9) {
+      for (var s = 0; s < 3; s++) {
+        var a = time * 6 + s * 2.1;
+        ctx.fillStyle = "#fff";
+        ctx.beginPath(); ctx.arc(bx + bw / 2 + Math.cos(a) * 7, by - 6 + Math.sin(a) * 5, 1.6, 0, 6.2832); ctx.fill();
+      }
+    }
+  }
+
   // ---------- Render ----------
   function render() {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -650,13 +936,20 @@
     drawSky();
     drawMountains();
     drawClouds();
+
+    // gameplay layer follows the unicorn vertically so jumps move with it
+    ctx.save();
+    ctx.translate(0, camOffY);
     drawRainbow();
     drawStars();
+    drawHazards();
+    drawShots();
     drawTrail();
     drawUnicorn();
     drawParts();
+    ctx.restore();
 
-    if (state === "play") drawHUD();
+    if (state === "play") { drawHUD(); drawJumpMeter(); }
     if (state === "title") drawTitle();
     if (state === "over") drawOver();
   }
