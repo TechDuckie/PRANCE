@@ -818,60 +818,130 @@
     ctx.closePath();
   }
 
+  function drawTitleParade() {
+    // cosmetic enemies drifting across behind the title
+    var rx1 = W + 40 - ((time * 110) % (W + 120));
+    drawRoller(rx1, H * 0.62, -time * 5);
+    var rx2 = W + 40 - (((time + 2.3) * 110) % (W + 120));
+    drawRoller(rx2, H * 0.46, -time * 5);
+    var hx = W + 40 - (((time * 80 + 1.1 * (W + 120)) % (W + 120)));
+    drawHopper(hx, H * 0.5 + Math.abs(Math.sin(time * 3)) * 18);
+    for (var i = 0; i < 3; i++) {
+      var sx = W + 30 - (((time * 60 + i * 140) % (W + 80)));
+      var sy = H * (0.28 + i * 0.13) + Math.sin(time * 2 + i) * 8;
+      ctx.save();
+      ctx.shadowColor = "#FFE45E"; ctx.shadowBlur = 10;
+      ctx.fillStyle = "#FFE45E"; drawStarShape(sx, sy, 7, time + i); ctx.fill();
+      ctx.fillStyle = "#FFF3A8"; drawStarShape(sx, sy, 3.5, time + i); ctx.fill();
+      ctx.restore();
+    }
+  }
   function drawTitle() {
-    ctx.fillStyle = "rgba(10,6,30,0.35)";
-    ctx.fillRect(0, 0, W, H);
+    // soft vignette so the title pops but the rainbow still glows
+    var g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, "rgba(18,10,45,0.22)");
+    g.addColorStop(0.5, "rgba(18,10,45,0.10)");
+    g.addColorStop(1, "rgba(18,10,45,0.30)");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+    drawTitleParade();
+
     ctx.textAlign = "center";
+    // big PRANCE — thick pink outline + white fill, gentle bounce
+    var bob = Math.sin(time * 2) * 6;
     ctx.save();
-    ctx.shadowColor = "#A855F7"; ctx.shadowBlur = 18;
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 56px system-ui, sans-serif";
-    ctx.fillText("PRANCE", W / 2, H * 0.4);
+    ctx.translate(W / 2, H * 0.36 + bob);
+    ctx.shadowColor = "#FF4FA3"; ctx.shadowBlur = 16;
+    ctx.font = "bold 66px system-ui, sans-serif";
+    ctx.lineJoin = "round"; ctx.lineWidth = 9; ctx.strokeStyle = "#FF4FA3";
+    ctx.strokeText("PRANCE", 0, 0);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#fff"; ctx.fillText("PRANCE", 0, 0);
     ctx.restore();
+
     ctx.fillStyle = "#FFE45E";
     ctx.font = "18px system-ui, sans-serif";
-    ctx.fillText("🦄  Run the rainbow  🌈", W / 2, H * 0.4 + 34);
-    ctx.fillStyle = "rgba(255,255,255,0.9)";
-    ctx.font = "16px system-ui, sans-serif";
-    var pulse = 0.6 + Math.sin(time * 3) * 0.4;
+    ctx.fillText("🦄  Run the rainbow  🌈", W / 2, H * 0.36 + 44);
+
+    var pulse = 0.55 + Math.sin(time * 3) * 0.45;
     ctx.globalAlpha = pulse;
-    ctx.fillText("tap & hold to jump — release to leap", W / 2, H * 0.78);
-    ctx.fillText("hold longer = jump higher", W / 2, H * 0.78 + 24);
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 21px system-ui, sans-serif";
+    ctx.fillText("tap & hold to jump", W / 2, H * 0.8);
     ctx.globalAlpha = 1;
+    ctx.fillStyle = "rgba(255,255,255,0.8)";
+    ctx.font = "15px system-ui, sans-serif";
+    ctx.fillText("hold longer = jump higher", W / 2, H * 0.8 + 26);
+
+    // sleek credit, bottom-left, in the rainbow palette
     ctx.textAlign = "left";
+    ctx.globalAlpha = 0.8;
+    ctx.font = "12px system-ui, sans-serif";
+    var cx = 14, cyy = H - 14;
+    ctx.fillStyle = "#fff"; ctx.fillText("made for ", cx, cyy);
+    cx += ctx.measureText("made for ").width;
+    ctx.fillStyle = "#FF4FA3"; ctx.fillText("JS13k 2026", cx, cyy);
+    cx += ctx.measureText("JS13k 2026").width;
+    ctx.fillStyle = "#4DE8FF"; ctx.fillText(" by Badankan", cx, cyy);
+    ctx.globalAlpha = 1;
   }
 
   function drawOver() {
-    ctx.fillStyle = "rgba(10,6,30,0.55)";
-    ctx.fillRect(0, 0, W, H);
+    var g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, "rgba(18,10,45,0.30)");
+    g.addColorStop(0.5, "rgba(18,10,45,0.18)");
+    g.addColorStop(1, "rgba(18,10,45,0.36)");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+    drawTitleParade();
+
     ctx.textAlign = "center";
+    // GAME OVER — pink outline + white fill, gentle bounce (matches title)
+    var bob = Math.sin(time * 2) * 5;
     ctx.save();
-    ctx.shadowColor = "#FF4D6D"; ctx.shadowBlur = 14;
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 42px system-ui, sans-serif";
-    ctx.fillText("GAME OVER", W / 2, H * 0.34);
+    ctx.translate(W / 2, H * 0.3 + bob);
+    ctx.shadowColor = "#FF4FA3"; ctx.shadowBlur = 16;
+    ctx.font = "bold 52px system-ui, sans-serif";
+    ctx.lineJoin = "round"; ctx.lineWidth = 8; ctx.strokeStyle = "#FF4FA3";
+    ctx.strokeText("GAME OVER", 0, 0);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#fff"; ctx.fillText("GAME OVER", 0, 0);
     ctx.restore();
 
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 30px system-ui, sans-serif";
-    ctx.fillText(dist + " m", W / 2, H * 0.46);
-    ctx.fillStyle = "#FFE45E";
-    ctx.font = "20px system-ui, sans-serif";
-    ctx.fillText("⭐ " + starsGot, W / 2, H * 0.46 + 30);
-    ctx.fillStyle = "rgba(255,255,255,0.85)";
-    ctx.font = "16px system-ui, sans-serif";
-    ctx.fillText("BEST  " + best + " m", W / 2, H * 0.46 + 56);
+    // stats, on-theme colors
+    ctx.fillStyle = "#fff"; ctx.font = "bold 30px system-ui, sans-serif";
+    ctx.fillText(dist + " m", W / 2, H * 0.45);
+    ctx.fillStyle = "#FFE45E"; ctx.font = "20px system-ui, sans-serif";
+    ctx.fillText("⭐ " + starsGot, W / 2, H * 0.45 + 30);
+    ctx.fillStyle = "#4DE8FF"; ctx.font = "16px system-ui, sans-serif";
+    ctx.fillText("BEST  " + best + " m", W / 2, H * 0.45 + 56);
 
-    // big restart button
-    var bw = 180, bh = 56, bx = W / 2 - bw / 2, by = H * 0.64;
-    ctx.fillStyle = "#A855F7";
-    ctx.save(); ctx.shadowColor = "#A855F7"; ctx.shadowBlur = 16;
-    roundRect(bx, by, bw, bh, 16); ctx.fill();
+    // cute restart button — pink fill, white thick outline, gentle pulse
+    var bw = 200, bh = 56;
+    var pulse = 1 + Math.sin(time * 3) * 0.03;
+    ctx.save();
+    ctx.translate(W / 2, H * 0.66 + bh / 2);
+    ctx.scale(pulse, pulse);
+    ctx.shadowColor = "#FF4FA3"; ctx.shadowBlur = 16;
+    ctx.fillStyle = "#FF4FA3";
+    roundRect(-bw / 2, -bh / 2, bw, bh, 16); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.lineWidth = 3; ctx.strokeStyle = "#fff";
+    roundRect(-bw / 2, -bh / 2, bw, bh, 16); ctx.stroke();
+    ctx.fillStyle = "#fff"; ctx.font = "bold 22px system-ui, sans-serif";
+    ctx.fillText("↻  PLAY AGAIN", 0, 8);
     ctx.restore();
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 22px system-ui, sans-serif";
-    ctx.fillText("↻  PLAY AGAIN", W / 2, by + 37);
+
+    // sleek credit, bottom-left, matches the menu
     ctx.textAlign = "left";
+    ctx.globalAlpha = 0.8; ctx.font = "12px system-ui, sans-serif";
+    var cx = 14, cyy = H - 14;
+    ctx.fillStyle = "#fff"; ctx.fillText("made for ", cx, cyy);
+    cx += ctx.measureText("made for ").width;
+    ctx.fillStyle = "#FF4FA3"; ctx.fillText("JS13k 2026", cx, cyy);
+    cx += ctx.measureText("JS13k 2026").width;
+    ctx.fillStyle = "#4DE8FF"; ctx.fillText(" by Badankan", cx, cyy);
+    ctx.globalAlpha = 1;
   }
 
   // ---------- Hazard drawing ----------
