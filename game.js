@@ -69,6 +69,18 @@
   var landSq = 0;      // landing squash timer
   var airT = 0, airDur = 0;
   var dead = false, deadT = 0;
+  var shards = [];
+  var groundLocal = 0; // local-space y of the rainbow surface at death
+  // the unicorn's real parts (ox,oy, colorIdx, kindIdx, size) in drawUnicorn's local space
+  // colorIdx: 0-4 mane, 5 body, 6 horn, 7 eye   kindIdx: 0 tail,1 leg,2 body,3 head,4 muzzle,5 ear,6 horn,7 eye,8 mane
+  var PK = ["tail", "leg", "body", "head", "muzzle", "ear", "horn", "eye", "mane"];
+  var PC = [MANE[0], MANE[1], MANE[2], MANE[3], MANE[4], BODY, HORN, EYE];
+  var uParts = [
+    [-70, -28, 0, 0, 8], [-17, -4, 5, 1, 14], [3, -2, 5, 1, 14], [20, -8, 5, 1, 14], [14, -6, 5, 1, 14],
+    [-1, -18, 5, 2, 30], [46, -55, 5, 3, 22], [62, -49, 5, 4, 12], [39, -74, 5, 5, 8],
+    [50, -77, 6, 6, 10], [56, -56, 7, 7, 3],
+    [28, -62, 0, 8, 7], [18, -58, 1, 8, 7], [8, -53, 2, 8, 7], [-2, -48, 3, 8, 7], [-12, -43, 4, 8, 7]
+  ];
 
   var pointerDown = false;
   var shake = 0;
@@ -539,6 +551,55 @@
     }
   }
 
+  // ---------- Shatter pieces ----------
+  function updateShards(dt) {
+    var G = 1300;                          // local-space gravity
+    var floorOn = (uy + 20) <= terrainYAt(camX) + 40; // unicorn was on/above the rainbow
+    for (var i = 0; i < shards.length; i++) {
+      var p = shards[i];
+      p.vly += G * dt;
+      p.dx += p.vlx * dt; p.dy += p.vly * dt; p.rot += p.vr * dt;
+      if (floorOn) {                        // settle on the rainbow surface
+        var floor = groundLocal - p.s * 0.5;
+        if (p.oy + p.dy > floor) {
+          p.dy = floor - p.oy;
+          p.vly = p.vly > 40 ? -p.vly * 0.3 : 0;
+          p.vlx *= 0.6; p.vr *= 0.6;
+        }
+      }
+    }
+  }
+  function drawPart(p) {
+    var s = p.s; ctx.fillStyle = p.col;
+    if (p.kind === "leg") {
+      ctx.strokeStyle = BODY; ctx.lineWidth = 8; ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(0, -s); ctx.lineTo(0, s); ctx.stroke();
+      ctx.fillStyle = EYE; ctx.beginPath(); ctx.arc(0, s, 3, 0, 6.2832); ctx.fill();
+    } else if (p.kind === "horn") {
+      ctx.save(); ctx.shadowColor = HORN; ctx.shadowBlur = 8;
+      ctx.beginPath(); ctx.moveTo(0, -s * 1.2); ctx.lineTo(s * 0.7, s * 0.7); ctx.lineTo(-s * 0.7, s * 0.7); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    } else if (p.kind === "eye") {
+      ctx.beginPath(); ctx.arc(0, 0, s, 0, 6.2832); ctx.fill();
+      ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(s * 0.3, -s * 0.3, s * 0.3, 0, 6.2832); ctx.fill();
+    } else { // body, head, muzzle, ear, mane, tail
+      ctx.beginPath(); ctx.ellipse(0, 0, s, s * 0.7, 0, 0, 6.2832); ctx.fill();
+    }
+  }
+  function drawShards() {
+    ctx.save();
+    ctx.translate(ux, uy); ctx.scale(0.7, 0.7); ctx.translate(0, 21);
+    for (var i = 0; i < shards.length; i++) {
+      var p = shards[i];
+      ctx.save();
+      ctx.translate(p.ox + p.dx, p.oy + p.dy);
+      ctx.rotate(p.rot);
+      drawPart(p);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
   // ---------- Input ----------
   function startCharge() {
     if (state === "title" || state === "over") { startGame(); return; }
@@ -585,7 +646,7 @@
     hazards.length = 0; shots.length = 0; lastHazardX = 0; hiJump = false; firstRoller = false;
     cursor = -50; uy = terrainYAt(0) - feet; vy = 0; grounded = true;
     rot = 0; flip = false; charging = 0; chargeT = 0; landSq = 0;
-    dead = false; deadT = 0; shake = 0;
+    dead = false; deadT = 0; shake = 0; shards.length = 0;
     genAhead();
   }
 
@@ -596,6 +657,21 @@
     sDeath();
     spawn(ux, uy, 26, { c: "#FF4FA3", sp0: 60, sp1: 220, life: 0.8, g: 260, sh: 6 });
     spawn(ux, uy, 16, { c: "#4DE8FF", sp0: 40, sp1: 180, life: 0.8, g: 260 });
+    // shatter the unicorn into its real parts — each detaches from its true spot
+    groundLocal = (terrainYAt(camX) - uy) / 0.7 - 21;
+    for (var si = 0; si < uParts.length; si++) {
+      var P = uParts[si];
+      var col = PC[P[2]];
+      var dxp = P[0], dyp = P[1] + 20;     // vector from the unicorn's center (0,-20)
+      var d = Math.sqrt(dxp * dxp + dyp * dyp) || 1, sp = rand(40, 210);
+      shards.push({
+        ox: P[0], oy: P[1], col: col, kind: PK[P[3]], s: P[4],
+        dx: 0, dy: 0,
+        vlx: (dxp / d) * sp + rand(-30, 30),
+        vly: (dyp / d) * sp * 0.4 - rand(60, 200), // pop up, then gravity
+        rot: Math.random() * 6.2832, vr: rand(-9, 9)
+      });
+    }
     if (dist > best) { best = dist; localStorage.setItem("prance_best", best); }
   }
 
@@ -614,10 +690,11 @@
       if (state === "title") {
         uy = terrainYAt(camX0()) - feet + Math.sin(time * 2) * 1.5; // idle bob
       }
-      // on "over" the unicorn stays where it fell (beside the broken rainbow)
+      // on "over" the unicorn has shattered — let the pieces fall and settle
       runPhase += dt * 8;
       updateCamera(dt);
       updateParts(dt);
+      updateShards(dt);
       return;
     }
 
@@ -1103,7 +1180,8 @@
     drawHazards();
     drawShots();
     drawTrail();
-    drawUnicorn();
+    if (!dead) drawUnicorn();
+    else drawShards();
     drawParts();
     ctx.restore();
 
