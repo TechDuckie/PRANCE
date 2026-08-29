@@ -36,7 +36,7 @@
   var RNB = ["#FF4D6D", "#FF9F43", "#FFE45E", "#65E572", "#38D9FF", "#4D8DFF", "#A855F7"];
   var BODY = "#F7F2FF", SHAD = "#D8C8F2";
   var MANE = ["#FF4FA3", "#FF9A3C", "#FFE45C", "#4DE8FF", "#A96CFF"];
-  var HORN = "#FFE66D", EYE = "#21153D";
+  var HORN = "#FFE45C", EYE = "#21153D";
 
   // ---------- World state ----------
   var state = "title"; // title | play | over
@@ -317,13 +317,14 @@
     ctx.stroke();
     ctx.restore();
 
-    // bands (violet bottom -> red top)
+    // bands, centered on the running surface (terrainYAt) so the unicorn runs mid-rainbow
     ctx.save();
     ctx.lineCap = "round"; ctx.lineJoin = "round";
+    var mid = (RNB.length - 1) / 2;
     for (var i = 0; i < RNB.length; i++) {
       ctx.strokeStyle = RNB[i];
       ctx.lineWidth = band;
-      drawRainbowPath(i * band);
+      drawRainbowPath((i - mid) * band);
       ctx.stroke();
     }
     ctx.restore();
@@ -382,100 +383,117 @@
 
   // ---------- Unicorn ----------
   function drawUnicorn() {
-    var sx = ux;
     var crouch = charging * 6;
     var sq = 1, sy = 1;
     if (landSq > 0) { sq = 1 + landSq * 0.35; sy = 1 - landSq * 0.3; }
+    var US = 0.7;
+    var sw = Math.sin(runPhase) * 8;          // running leg swing
+    var bob = Math.abs(Math.sin(runPhase)) * 2;
+    var wind = Math.sin(time * 9) * 2;        // mane/tail flow
 
     ctx.save();
-    ctx.translate(sx, uy + crouch);
+    ctx.translate(ux, uy + crouch - bob);
     ctx.rotate(rot);
-    ctx.scale(sq, sy);
-
-    // tail — two clean flowing strands behind the rump
+    ctx.scale(US * sq, US * sy);
+    ctx.translate(0, 21);                      // align spec feet with the ground
     ctx.lineCap = "round"; ctx.lineJoin = "round";
-    for (var ti = 0; ti < 2; ti++) {
-      ctx.strokeStyle = MANE[ti + 2];
-      ctx.lineWidth = 3.4;
-      var tw = Math.sin(time * 9 + ti * 1.4) * 3;
-      ctx.beginPath();
-      ctx.moveTo(-22, -2 - ti * 2);
-      ctx.quadraticCurveTo(-34 - ti * 2, -4 + tw, -39 - ti * 3, 12 + tw);
-      ctx.stroke();
-    }
 
-    // legs — rounded with a run cycle
-    var lg = Math.sin(runPhase) * 4.5;
-    var lg2 = Math.sin(runPhase + Math.PI) * 4.5;
-    legShape(-13, lg); legShape(-4, lg2); legShape(9, lg); legShape(17, lg2);
+    // 1. TAIL — rainbow ribbons flowing back
+    ctx.lineWidth = 8;
+    ctx.strokeStyle = MANE[0]; ctx.beginPath(); ctx.moveTo(-29, -28); ctx.bezierCurveTo(-48 + wind, -32, -56 + wind, -45, -69, -42); ctx.bezierCurveTo(-76 + wind, -40, -80 + wind, -35, -84, -30); ctx.stroke();
+    ctx.strokeStyle = MANE[1]; ctx.beginPath(); ctx.moveTo(-29, -27); ctx.bezierCurveTo(-48 + wind, -30, -57 + wind, -40, -71, -37); ctx.bezierCurveTo(-78 + wind, -35, -82 + wind, -30, -87, -26); ctx.stroke();
+    ctx.strokeStyle = MANE[2]; ctx.beginPath(); ctx.moveTo(-30, -24); ctx.bezierCurveTo(-49 + wind, -26, -58 + wind, -35, -72, -32); ctx.bezierCurveTo(-79 + wind, -30, -84 + wind, -25, -89, -21); ctx.stroke();
+    ctx.strokeStyle = MANE[3]; ctx.beginPath(); ctx.moveTo(-31, -21); ctx.bezierCurveTo(-49 + wind, -22, -60 + wind, -30, -73, -27); ctx.bezierCurveTo(-81 + wind, -25, -85 + wind, -20, -91, -16); ctx.stroke();
+    ctx.strokeStyle = MANE[4]; ctx.beginPath(); ctx.moveTo(-31, -18); ctx.bezierCurveTo(-49 + wind, -18, -61 + wind, -25, -75, -21); ctx.bezierCurveTo(-82 + wind, -19, -87 + wind, -14, -93, -10); ctx.stroke();
 
-    // body — smooth capsule
-    ctx.fillStyle = BODY;
-    roundRect(-24, -11, 48, 22, 11); ctx.fill();
-    // soft belly shade
-    ctx.fillStyle = SHAD;
-    roundRect(-20, 5, 40, 6, 3); ctx.fill();
+    // 2. REAR LEGS — straight, swinging back and forth
+    ctx.strokeStyle = BODY; ctx.lineWidth = 8;
+    leg(-17, -15, -sw, 23);
+    leg(3, -12, sw, 20);
 
-    // neck — smooth wedge flowing into the head
+    // 3. BODY
     ctx.fillStyle = BODY;
     ctx.beginPath();
-    ctx.moveTo(14, -6);
-    ctx.quadraticCurveTo(20, -16, 27, -19);
-    ctx.lineTo(31, -10);
-    ctx.quadraticCurveTo(22, -2, 16, 3);
-    ctx.closePath();
-    ctx.fill();
+    ctx.moveTo(-30, -38);
+    ctx.bezierCurveTo(-15, -47, 15, -47, 32, -35);
+    ctx.bezierCurveTo(42, -27, 42, -10, 28, -5);
+    ctx.bezierCurveTo(10, 2, -18, 1, -32, -10);
+    ctx.bezierCurveTo(-43, -20, -42, -31, -30, -38);
+    ctx.closePath(); ctx.fill();
 
-    // mane — three clean wind-blown strands
-    for (var m = 0; m < 3; m++) {
-      ctx.strokeStyle = MANE[m];
-      ctx.lineWidth = 3.4; ctx.lineCap = "round";
-      var w = Math.sin(time * 9 + m * 0.9) * 3.5;
-      ctx.beginPath();
-      ctx.moveTo(24 - m * 0.6, -19 - m * 0.4);
-      ctx.quadraticCurveTo(10 - m, -25 + w, -9 - m * 1.5, -9 + w * 0.5);
-      ctx.stroke();
-    }
+    // 4. BODY SHADOW
+    ctx.fillStyle = SHAD;
+    ctx.beginPath(); ctx.ellipse(-1, -11, 28, 10, 0, 0, Math.PI); ctx.fill();
 
-    // head — tilted forward; horn + ear follow the head angle
-    var headAngle = 0.12;
-    ctx.save();
-    ctx.translate(27, -19);
-    ctx.rotate(headAngle);
+    // 5. NECK
     ctx.fillStyle = BODY;
-    ctx.beginPath(); ctx.ellipse(4, 0, 10, 6.5, 0, 0, 6.2832); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(13, 2.5, 6, 4, 0, 0, 6.2832); ctx.fill();
-    // ear
-    ctx.beginPath(); ctx.moveTo(-1, -6); ctx.lineTo(-2, -14); ctx.lineTo(4, -7); ctx.closePath(); ctx.fill();
-    // forelock
-    ctx.strokeStyle = MANE[1]; ctx.lineWidth = 2.4; ctx.lineCap = "round";
-    ctx.beginPath(); ctx.moveTo(1, -6); ctx.quadraticCurveTo(-3, -12, 3, -14); ctx.stroke();
-    // horn — points up-forward, rotates with the head
+    ctx.beginPath();
+    ctx.moveTo(17, -30); ctx.lineTo(30, -54); ctx.lineTo(46, -48); ctx.lineTo(34, -17);
+    ctx.closePath(); ctx.fill();
+
+    // 6. FRONT LEGS — straight, swinging back and forth
+    ctx.strokeStyle = BODY; ctx.lineWidth = 8;
+    leg(20, -18, sw, 20);
+    leg(14, -16, -sw, 20);
+
+    // 7. MANE — rainbow ribbons flowing back
+    ctx.lineWidth = 7;
+    ctx.strokeStyle = MANE[0]; ctx.beginPath(); ctx.moveTo(34, -67); ctx.bezierCurveTo(19 + wind, -72, 9 + wind, -63, 3, -53); ctx.stroke();
+    ctx.strokeStyle = MANE[1]; ctx.beginPath(); ctx.moveTo(31, -62); ctx.bezierCurveTo(17 + wind, -67, 5 + wind, -58, -3, -48); ctx.stroke();
+    ctx.strokeStyle = MANE[2]; ctx.beginPath(); ctx.moveTo(30, -59); ctx.bezierCurveTo(16 + wind, -64, 5 + wind, -55, -4, -44); ctx.stroke();
+    ctx.strokeStyle = MANE[3]; ctx.beginPath(); ctx.moveTo(29, -55); ctx.bezierCurveTo(15 + wind, -60, 5 + wind, -52, -5, -42); ctx.stroke();
+    ctx.strokeStyle = MANE[4]; ctx.beginPath(); ctx.moveTo(28, -51); ctx.bezierCurveTo(14 + wind, -55, 4 + wind, -47, -7, -37); ctx.stroke();
+
+    // 8. HEAD
+    ctx.fillStyle = BODY;
+    ctx.beginPath();
+    ctx.moveTo(25, -55);
+    ctx.bezierCurveTo(29, -68, 43, -74, 57, -69);
+    ctx.bezierCurveTo(68, -66, 73, -57, 69, -48);
+    ctx.bezierCurveTo(65, -40, 54, -37, 43, -40);
+    ctx.bezierCurveTo(34, -42, 28, -47, 25, -55);
+    ctx.closePath(); ctx.fill();
+
+    // 9. MUZZLE
+    ctx.fillStyle = BODY;
+    ctx.beginPath(); ctx.ellipse(62, -49, 12, 8, 0, 0, 6.2832); ctx.fill();
+
+    // 10. EAR
+    ctx.fillStyle = BODY;
+    ctx.beginPath(); ctx.moveTo(35, -67); ctx.lineTo(33, -81); ctx.lineTo(44, -71); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = SHAD;
+    ctx.beginPath(); ctx.moveTo(36, -70); ctx.lineTo(35, -77); ctx.lineTo(41, -72); ctx.closePath(); ctx.fill();
+
+    // 11. HORN — small golden cone
     ctx.save();
-    ctx.shadowColor = HORN; ctx.shadowBlur = 10; ctx.fillStyle = HORN;
-    ctx.beginPath(); ctx.moveTo(2, -4); ctx.lineTo(7, -19); ctx.lineTo(11, -3); ctx.closePath(); ctx.fill();
+    ctx.shadowColor = HORN; ctx.shadowBlur = 8;
+    ctx.fillStyle = HORN;
+    ctx.beginPath(); ctx.moveTo(45, -69); ctx.lineTo(52, -86); ctx.lineTo(56, -68); ctx.closePath(); ctx.fill();
     ctx.restore();
-    // eye + highlight
+    ctx.strokeStyle = "#FFF3A0"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(50, -72); ctx.lineTo(53, -81); ctx.stroke();
+
+    // 12. EYE
     ctx.fillStyle = EYE;
-    ctx.beginPath(); ctx.arc(7, -1, 1.6, 0, 6.2832); ctx.fill();
-    ctx.fillStyle = "rgba(255,255,255,0.9)";
-    ctx.beginPath(); ctx.arc(7.6, -1.6, 0.6, 0, 6.2832); ctx.fill();
+    ctx.beginPath(); ctx.arc(56, -56, 2.8, 0, 6.2832); ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.beginPath(); ctx.arc(57, -57, 0.8, 0, 6.2832); ctx.fill();
+
     // nostril
     ctx.fillStyle = SHAD;
-    ctx.beginPath(); ctx.arc(17, 3, 1, 0, 6.2832); ctx.fill();
-    ctx.restore();
+    ctx.beginPath(); ctx.arc(69, -47, 1.2, 0, 6.2832); ctx.fill();
 
     ctx.restore();
-  }
-  function legShape(x, sw) {
-    ctx.save();
-    ctx.translate(x, 8);
-    ctx.rotate(sw * 0.05);
-    ctx.fillStyle = SHAD;
-    roundRect(-2.5, 0, 5, 12, 2.5); ctx.fill();
-    ctx.fillStyle = EYE;
-    roundRect(-2.5, 10, 5, 2.5, 1.2); ctx.fill(); // hoof
-    ctx.restore();
+
+    function leg(x0, y0, s, len) {
+      var fx = x0 + s, fy = y0 + len;
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(fx, fy);
+      ctx.stroke();
+      ctx.fillStyle = EYE;
+      ctx.beginPath(); ctx.arc(fx, fy, 3, 0, 6.2832); ctx.fill();
+    }
   }
 
   // ---------- Input ----------
@@ -595,7 +613,7 @@
         spawn(ux, uy + feet, 8, { c: "#ffffff", sp0: 40, sp1: 120, life: 0.35, g: 200, ang: -1.57, spread: 1.1 });
       }
       // high-jump trail (stored in world space so it flows left with travel)
-      if (vy < -120) { trail.push({ wx: camX, y: uy, life: 0.45 }); }
+      if (flip && vy < -120) { trail.push({ wx: camX, y: uy, life: 0.45 }); }
     } else {
       // grounded: hug terrain
       var g = terrainYAt(camX);
@@ -704,13 +722,33 @@
 
   // ---------- UI ----------
   function drawTrail() {
+    if (trail.length < 2) return;
+    var pts = [];
     for (var i = 0; i < trail.length; i++) {
-      var t = trail[i];
-      ctx.globalAlpha = clamp(t.life / 0.45, 0, 1) * 0.5;
-      ctx.fillStyle = RNB[(i + (time * 10 | 0)) % RNB.length];
-      ctx.beginPath(); ctx.arc(ux + (t.wx - camX), t.y, 5, 0, 6.2832); ctx.fill();
+      pts.push({ x: ux + (trail[i].wx - camX), y: trail[i].y, a: clamp(trail[i].life / 0.45, 0, 1) });
+    }
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    for (var c = 0; c < 7; c++) {
+      ctx.strokeStyle = RNB[c];
+      // soft glow pass
+      ctx.globalAlpha = 0.2 * pts[0].a;
+      ctx.lineWidth = 18;
+      strokeRibbon(pts, c);
+      // bright pass
+      ctx.globalAlpha = 0.95 * pts[0].a;
+      ctx.lineWidth = 9;
+      strokeRibbon(pts, c);
     }
     ctx.globalAlpha = 1;
+    function strokeRibbon(pts, c) {
+      ctx.beginPath();
+      for (var i = 0; i < pts.length; i++) {
+        var wave = Math.sin(i * 0.8 + time * 6) * 2;
+        var y = pts[i].y + c * 1.7 + wave;
+        if (i) ctx.lineTo(pts[i].x, y); else ctx.moveTo(pts[i].x, y);
+      }
+      ctx.stroke();
+    }
   }
 
   function drawHUD() {
@@ -817,24 +855,28 @@
   function drawRoller(x, y, rot) {
     ctx.save(); ctx.translate(x, y); ctx.rotate(rot);
     ctx.lineJoin = "round";
-    // big cartoon spikes with dark outlines, radiating from the ball
+    // soft glow so it pops
+    ctx.shadowColor = "#C77DFF"; ctx.shadowBlur = 12;
+    // bright cartoon spikes (no outlines), radiating from the ball
     for (var k = 0; k < 8; k++) {
       var a = k / 8 * 6.2832;
-      var b0x = Math.cos(a - 0.18) * 14, b0y = Math.sin(a - 0.18) * 14;
-      var b1x = Math.cos(a + 0.18) * 14, b1y = Math.sin(a + 0.18) * 14;
-      var tx = Math.cos(a) * 28, ty = Math.sin(a) * 28;
+      var b0x = Math.cos(a - 0.2) * 15, b0y = Math.sin(a - 0.2) * 15;
+      var b1x = Math.cos(a + 0.2) * 15, b1y = Math.sin(a + 0.2) * 15;
+      var tx = Math.cos(a) * 30, ty = Math.sin(a) * 30;
       ctx.beginPath();
       ctx.moveTo(b0x, b0y); ctx.lineTo(tx, ty); ctx.lineTo(b1x, b1y); ctx.closePath();
-      ctx.fillStyle = "#C77DFF"; ctx.fill();
-      ctx.lineWidth = 2.6; ctx.strokeStyle = "#241338"; ctx.stroke();
+      ctx.fillStyle = "#FF4FA3"; ctx.fill();
     }
-    // ball body with thick cartoon outline
-    ctx.beginPath(); ctx.arc(0, 0, 16, 0, 6.2832);
-    ctx.fillStyle = "#7A43B8"; ctx.fill();
-    ctx.lineWidth = 3; ctx.strokeStyle = "#241338"; ctx.stroke();
+    // bright ball body
+    ctx.beginPath(); ctx.arc(0, 0, 17, 0, 6.2832);
+    ctx.fillStyle = "#A96CFF"; ctx.fill();
+    ctx.shadowBlur = 0;
+    // lighter top crescent for cartoon shading
+    ctx.beginPath(); ctx.arc(0, 0, 17, Math.PI * 1.05, Math.PI * 1.95);
+    ctx.fillStyle = "#D7A6FF"; ctx.fill();
     // glossy highlight
-    ctx.beginPath(); ctx.arc(-5, -5, 6, 0, 6.2832);
-    ctx.fillStyle = "rgba(255,255,255,0.55)"; ctx.fill();
+    ctx.beginPath(); ctx.arc(-5, -6, 6, 0, 6.2832);
+    ctx.fillStyle = "rgba(255,255,255,0.7)"; ctx.fill();
     ctx.restore();
   }
   function drawHopper(x, y) {
