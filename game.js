@@ -7,11 +7,12 @@
 
   // ---------- Setup ----------
   var LW = 360;            // logical width (fixed)
-  var H = 640;             // logical height (recomputed on resize)
+  var LH = 640;            // portrait design height (contain target)
+  var H = LH;              // logical height (recomputed on resize)
   var W = LW;
   var canvas = document.getElementById("game");
   var ctx = canvas.getContext("2d");
-  var dpr = 1, scale = 1;
+  var dpr = 1, scale = 1, offX = 0;
 
   function resize() {
     dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -20,8 +21,13 @@
     canvas.style.height = ch + "px";
     canvas.width = Math.round(cw * dpr);
     canvas.height = Math.round(ch * dpr);
-    scale = (cw * dpr) / LW;     // logical x in [0..360] -> full width
-    H = Math.round((ch * dpr) / scale); // logical height fills screen
+    scale = (cw * dpr) / LW;            // fill width (mobile portrait)
+    H = Math.round((ch * dpr) / scale);
+    offX = 0;
+    if (H < LH) {                        // wider/landscape window: contain portrait, center it
+      H = LH; scale = (ch * dpr) / LH;
+      offX = Math.round((canvas.width - LW * scale) / 2);
+    }
     W = LW;
   }
   window.addEventListener("resize", resize);
@@ -70,16 +76,13 @@
   var airT = 0, airDur = 0;
   var dead = false, deadT = 0;
   var shards = [];
-  var groundLocal = 0; // local-space y of the rainbow surface at death
-  // the unicorn's real parts (ox,oy, colorIdx, kindIdx, size) in drawUnicorn's local space
-  // colorIdx: 0-4 mane, 5 body, 6 horn, 7 eye   kindIdx: 0 tail,1 leg,2 body,3 head,4 muzzle,5 ear,6 horn,7 eye,8 mane
-  var PK = ["tail", "leg", "body", "head", "muzzle", "ear", "horn", "eye", "mane"];
-  var PC = [MANE[0], MANE[1], MANE[2], MANE[3], MANE[4], BODY, HORN, EYE];
+  var groundLocal = 0; // local space y of the rainbow surface at death
+  // real unicorn parts: [ox, oy, color, kind, size]; kind: 0 tail,1 leg,2 body,3 head,4 muzzle,5 ear,6 horn,7 eye,8 mane
   var uParts = [
-    [-70, -28, 0, 0, 8], [-17, -4, 5, 1, 14], [3, -2, 5, 1, 14], [20, -8, 5, 1, 14], [14, -6, 5, 1, 14],
-    [-1, -18, 5, 2, 30], [46, -55, 5, 3, 22], [62, -49, 5, 4, 12], [39, -74, 5, 5, 8],
-    [50, -77, 6, 6, 10], [56, -56, 7, 7, 3],
-    [28, -62, 0, 8, 7], [18, -58, 1, 8, 7], [8, -53, 2, 8, 7], [-2, -48, 3, 8, 7], [-12, -43, 4, 8, 7]
+    [-70, -28, MANE[0], 0, 8], [-17, -4, BODY, 1, 14], [3, -2, BODY, 1, 14],
+    [-1, -18, BODY, 2, 30], [46, -55, BODY, 3, 22], [62, -49, BODY, 4, 12], [39, -74, BODY, 5, 8],
+    [50, -77, HORN, 6, 10], [56, -56, EYE, 7, 3],
+    [28, -62, MANE[0], 8, 7], [18, -58, MANE[1], 8, 7], [8, -53, MANE[2], 8, 7], [-2, -48, MANE[3], 8, 7], [-12, -43, MANE[4], 8, 7]
   ];
 
   var pointerDown = false;
@@ -571,15 +574,13 @@
   }
   function drawPart(p) {
     var s = p.s; ctx.fillStyle = p.col;
-    if (p.kind === "leg") {
+    if (p.k === 1) {
       ctx.strokeStyle = BODY; ctx.lineWidth = 8; ctx.lineCap = "round";
       ctx.beginPath(); ctx.moveTo(0, -s); ctx.lineTo(0, s); ctx.stroke();
       ctx.fillStyle = EYE; ctx.beginPath(); ctx.arc(0, s, 3, 0, 6.2832); ctx.fill();
-    } else if (p.kind === "horn") {
-      ctx.save(); ctx.shadowColor = HORN; ctx.shadowBlur = 8;
+    } else if (p.k === 6) {
       ctx.beginPath(); ctx.moveTo(0, -s * 1.2); ctx.lineTo(s * 0.7, s * 0.7); ctx.lineTo(-s * 0.7, s * 0.7); ctx.closePath(); ctx.fill();
-      ctx.restore();
-    } else if (p.kind === "eye") {
+    } else if (p.k === 7) {
       ctx.beginPath(); ctx.arc(0, 0, s, 0, 6.2832); ctx.fill();
       ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(s * 0.3, -s * 0.3, s * 0.3, 0, 6.2832); ctx.fill();
     } else { // body, head, muzzle, ear, mane, tail
@@ -661,11 +662,10 @@
     groundLocal = (terrainYAt(camX) - uy) / 0.7 - 21;
     for (var si = 0; si < uParts.length; si++) {
       var P = uParts[si];
-      var col = PC[P[2]];
       var dxp = P[0], dyp = P[1] + 20;     // vector from the unicorn's center (0,-20)
       var d = Math.sqrt(dxp * dxp + dyp * dyp) || 1, sp = rand(40, 210);
       shards.push({
-        ox: P[0], oy: P[1], col: col, kind: PK[P[3]], s: P[4],
+        ox: P[0], oy: P[1], col: P[2], k: P[3], s: P[4],
         dx: 0, dy: 0,
         vlx: (dxp / d) * sp + rand(-30, 30),
         vly: (dyp / d) * sp * 0.4 - rand(60, 200), // pop up, then gravity
@@ -1163,10 +1163,10 @@
   // ---------- Render ----------
   function render() {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, canvas.width, canvas.height); // transparent -> page sky shows in letterbox bars
     var shx = 0, shy = 0;
     if (shake > 0) { shx = rand(-shake, shake); shy = rand(-shake, shake); }
-    ctx.setTransform(scale, 0, 0, scale, shx * scale, shy * scale);
+    ctx.setTransform(scale, 0, 0, scale, offX + shx * scale, shy * scale);
 
     drawSky();
     drawMountains();
