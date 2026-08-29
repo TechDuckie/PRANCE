@@ -103,6 +103,50 @@
   function sFlip() { beep(660, 0.12, "triangle", 0.04, 990); }
   function sBolt() { beep(200, 0.18, "sawtooth", 0.05, 80); }
 
+  // ---------- Background music (tiny looping chiptune) ----------
+  var musicOn = false, mGain = null, mNext = 0, mStep = 0;
+  var BPM = 128, MSTEP = 60 / BPM / 2;   // eighth notes
+  var MUSVOL = 0.05;
+  var BASE = 523.25;                      // C5
+  function mFreq(s) { return BASE * Math.pow(2, s / 12); }
+  // three happy phrase variations (semitone offsets from C5, -1 = rest)
+  var MEL = [
+    [4, 7, 0, 7, 4, 9, 4, -1, 7, 0, 7, 4, 9, 4, 7, 0],
+    [0, 2, 4, 7, 9, 7, 4, 2, 0, 2, 4, 9, 12, 9, 7, 4],
+    [4, 7, 9, 12, 9, 7, 4, 2, 0, 4, 2, 4, 7, 0, -1, -1]
+  ];
+  var BASS = [0, -1, 4, -1, 7, -1, 2, -1, 0, -1, 4, -1, 2, -1, 0, -1];
+  function startMusic() {
+    var a = actx(); if (!a || musicOn) return;
+    musicOn = true; mGain = a.createGain(); mGain.gain.value = 1; mGain.connect(a.destination);
+    mNext = a.currentTime + 0.15; mStep = 0;
+  }
+  function mNote(f, t, d, type, vol) {
+    var a = actx(); if (!a) return;
+    var o = a.createOscillator(), g = a.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol * MUSVOL, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    o.connect(g); g.connect(mGain);
+    o.start(t); o.stop(t + d + 0.02);
+  }
+  function musicTick() {
+    if (!musicOn) return;
+    var a = AC; if (!a) return;
+    if (mNext < a.currentTime - 0.1) mNext = a.currentTime + 0.05; // avoid catch-up burst
+    var look = a.currentTime + 0.2;
+    while (mNext < look) {
+      var s = mStep % 16;
+      var ph = ((mStep / 16 | 0) % MEL.length);
+      var m = MEL[ph][s];
+      if (m >= 0) mNote(mFreq(m), mNext, MSTEP * 0.95, "square", 0.7);
+      var b = BASS[s];
+      if (b >= 0) mNote(mFreq(b) / 2, mNext, MSTEP * 0.95, "triangle", 0.5); // bass an octave down
+      mNext += MSTEP; mStep++;
+    }
+  }
+
   // ---------- Terrain ----------
   function difficulty() { return Math.min(1, meters / 2500); }
 
@@ -498,6 +542,7 @@
     if (state === "title" || state === "over") { startGame(); return; }
     if (state === "play" && grounded) chargeT = 0;
     pointerDown = true;
+    startMusic();
   }
   function releaseCharge() {
     pointerDown = false;
@@ -531,6 +576,7 @@
   // ---------- Game flow ----------
   function startGame() {
     actx();
+    startMusic();
     state = "play";
     camX = 0; speed = 200; meters = 0; dist = 0; starsGot = 0;
     gaps.length = 0; stars.length = 0; parts.length = 0; trail.length = 0;
@@ -1000,6 +1046,7 @@
     last = now;
     if (dt > 0.05) dt = 0.05; // clamp big gaps
     update(dt);
+    musicTick();
     render();
     requestAnimationFrame(frame);
   }
