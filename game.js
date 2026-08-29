@@ -193,7 +193,7 @@
     if (t === 2) return meters >= 450;
     if (t === 3) return meters >= 900;
     if (t === 4) return meters >= 1400;
-    if (t === 5) return meters >= 450;
+    if (t === 5) return meters >= 300;
     return false;
   }
   function spawnHazard(ty, wx) {
@@ -231,10 +231,12 @@
         if (Math.random() < 0.6) {
           addStar((a + b) / 2, terrainYAt(a) - 110 - rand(0, 30)); // high-risk star
         }
-        if (stageAllows(5) && Math.random() < 0.45) {
-          hazards.push({ type: 5, wx: b, len: 34 + Math.random() * 30 }); // spike at landing edge
-        }
         cursor += gl;
+        // spike cluster (small-long-small) on the solid ground just after the gap
+        if (stageAllows(5) && Math.random() < 0.6) {
+          var sp = 16, sl = [26 + Math.random() * 8, 44 + Math.random() * 12, 26 + Math.random() * 8];
+          for (var si = 0; si < 3; si++) hazards.push({ type: 5, wx: cursor + 18 + si * sp, len: sl[si] });
+        }
       }
     }
     // prune behind
@@ -753,7 +755,7 @@
         if (Math.abs(ux - sx) < 8 + R && uy > top - 30 && uy < bot) return true;
       } else if (h.type === 5) {
         var sy = terrainYAt(h.wx);
-        if (Math.abs(ux - sx) < 8 + R && uy > sy - 2 && uy < sy + h.len) return true;
+        if (Math.abs(ux - sx) < 8 + R && uy > sy - h.len - R) return true;
       }
     }
     for (var k = 0; k < shots.length; k++) {
@@ -976,10 +978,10 @@
     ctx.save();
     ctx.shadowColor = "#C85CFF"; ctx.shadowBlur = 10;
     ctx.fillStyle = "#B95CFF";
-    ctx.beginPath(); ctx.moveTo(x - 9, sy); ctx.lineTo(x + 9, sy); ctx.lineTo(x, sy + len); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x - 9, sy); ctx.lineTo(x + 9, sy); ctx.lineTo(x, sy - len); ctx.closePath(); ctx.fill();
     ctx.shadowBlur = 0;
     ctx.fillStyle = "#F1B3FF";
-    ctx.beginPath(); ctx.moveTo(x - 3, sy); ctx.lineTo(x + 3, sy); ctx.lineTo(x, sy + len * 0.7); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x - 3, sy); ctx.lineTo(x + 3, sy); ctx.lineTo(x, sy - len * 0.7); ctx.closePath(); ctx.fill();
     ctx.restore();
   }
   function chargingColor(c) {
