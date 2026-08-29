@@ -364,19 +364,16 @@
       var rot = time * 1.5 + s.p;
       ctx.save();
       ctx.shadowColor = "#FFE45E"; ctx.shadowBlur = 12;
-      ctx.fillStyle = "rgba(255,228,94,0.22)";
-      drawStarShape(sx, s.y, r * 2.0, rot); ctx.fill();
-      // crisp body
+      // soft glow
+      ctx.fillStyle = "rgba(255,228,94,0.25)";
+      drawStarShape(sx, s.y, r * 1.9, rot); ctx.fill();
+      // bright body (no outline)
+      ctx.shadowBlur = 0;
       ctx.fillStyle = "#FFE45E";
       drawStarShape(sx, s.y, r, rot); ctx.fill();
-      // outline for readability
-      ctx.lineJoin = "round";
-      ctx.lineWidth = 1.4;
-      ctx.strokeStyle = "rgba(255,255,255,0.92)";
-      drawStarShape(sx, s.y, r, rot); ctx.stroke();
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = "rgba(122,44,118,0.9)";
-      drawStarShape(sx, s.y, r * 1.45, rot + 0.2); ctx.stroke();
+      // lighter center for a cartoon pop
+      ctx.fillStyle = "#FFF3A8";
+      drawStarShape(sx, s.y, r * 0.5, rot); ctx.fill();
       ctx.restore();
     }
   }
