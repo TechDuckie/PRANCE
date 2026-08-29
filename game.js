@@ -993,15 +993,16 @@
   function drawJumpMeter() {
     if (charging <= 0.001) return; // only while charging
     var hy = uy + camOffY;                 // horse feet in screen space
-    var bw = 12, bh = 120, bx = ux - 56, by = hy - bh - 8;
+    var bw = 14, bh = 80, bx = ux - 56, by = hy - bh - 8, r = 3;
     // track
-    ctx.fillStyle = "rgba(0,0,0,0.35)"; roundRect(bx, by, bw, bh, 6); ctx.fill();
+    ctx.fillStyle = "rgba(20,12,40,0.55)"; roundRect(bx, by, bw, bh, r); ctx.fill();
+    // pink outline
+    ctx.lineWidth = 3; ctx.strokeStyle = "#FF4FA3"; roundRect(bx, by, bw, bh, r); ctx.stroke();
     // fill bottom-up by charge (jump height)
     var fh = bh * clamp(charging, 0, 1);
-    var c = chargingColor(charging);
-    ctx.fillStyle = c;
+    ctx.fillStyle = chargingColor(charging);
     if (charging > 0.9) { ctx.shadowColor = "#fff"; ctx.shadowBlur = 12; }
-    roundRect(bx, by + (bh - fh), bw, fh, 6); ctx.fill();
+    roundRect(bx, by + (bh - fh), bw, fh, r); ctx.fill();
     ctx.shadowBlur = 0;
     if (charging > 0.9) {
       for (var s = 0; s < 3; s++) {
