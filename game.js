@@ -4,8 +4,6 @@
  */
 (function () {
   "use strict";
-
-  // ---------- Setup ----------
   var LW = 360;            // logical width (fixed)
   var LH = 640;            // portrait design height (contain target)
   var H = LH;              // logical height (recomputed on resize)
@@ -32,25 +30,20 @@
   }
   window.addEventListener("resize", resize);
   resize();
-
-  // ---------- Helpers ----------
   function rand(a, b) { return a + Math.random() * (b - a); }
   function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
   function lerp(a, b, t) { return a + (b - a) * t; }
-
-  // ---------- Palette ----------
   var RNB = ["#FF4D6D", "#FF9F43", "#FFE45E", "#65E572", "#38D9FF", "#4D8DFF", "#A855F7"];
   var BODY = "#F7F2FF", SHAD = "#D8C8F2";
   var MANE = ["#FF4FA3", "#FF9A3C", "#FFE45C", "#4DE8FF", "#A96CFF"];
   var HORN = "#FFE45C", EYE = "#21153D";
-
-  // ---------- World state ----------
   var state = "title"; // title | play | over
   var camX = 0;        // world scroll (px)
   var speed = 0;
   var meters = 0;
   var dist = 0;        // floor(meters)
   var starsGot = 0;
+  var flyers = [];     // fly-to-icon star anims
   var best = +(localStorage.getItem("prance_best") || 0);
 
   var gaps = [];       // {a,b} world x gap ranges
@@ -61,6 +54,7 @@
   var lastHazardX = 0; // spacing control
   var hiJump = false;  // high-jump landing shake flag
   var firstRoller = false; // guaranteed intro enemy
+  var STX = W - 30, STY = 24; // HUD star icon
 
   var ux = 90;         // unicorn screen x (left third)
   var uy = 0;          // unicorn body-center y
@@ -76,8 +70,8 @@
   var airT = 0, airDur = 0;
   var dead = false, deadT = 0;
   var shards = [];
-  var groundLocal = 0; // local space y of the rainbow surface at death
-  // real unicorn parts: [ox, oy, color, kind, size]; kind: 0 tail,1 leg,2 body,3 head,4 muzzle,5 ear,6 horn,7 eye,8 mane
+  var groundLocal = 0;
+  // unicorn parts: [ox,oy,color,kind,size]; kind: 0tail 1leg 2body 3head 4muzzle 5ear 6horn 7eye 8mane
   var uParts = [
     [-70, -28, MANE[0], 0, 8], [-17, -4, BODY, 1, 14], [3, -2, BODY, 1, 14],
     [-1, -18, BODY, 2, 30], [46, -55, BODY, 3, 22], [62, -49, BODY, 4, 12], [39, -74, BODY, 5, 8],
@@ -89,10 +83,8 @@
   var shake = 0;
   var time = 0;
   var trail = [];     // high-jump trail points
-  var camOffY = 0;    // vertical camera offset (world follows the unicorn)
-  var GROUND_ANCHOR = 0.62; // where the unicorn's feet rest on screen (fraction of H)
-
-  // ---------- Audio (procedural) ----------
+  var camOffY = 0;
+  var GROUND_ANCHOR = 0.62;
   var AC = null;
   function actx() {
     if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { } }
@@ -117,8 +109,6 @@
   function sDeath() { beep(220, 0.5, "sawtooth", 0.08, 60); }
   function sFlip() { beep(660, 0.12, "triangle", 0.04, 990); }
   function sBolt() { beep(200, 0.18, "sawtooth", 0.05, 80); }
-
-  // ---------- Background music (tiny looping chiptune) ----------
   var musicOn = false, mGain = null, mNext = 0, mStep = 0;
   var BPM = 128, MSTEP = 60 / BPM / 2;   // eighth notes
   var MUSVOL = 0.05;
@@ -161,8 +151,6 @@
       mNext += MSTEP; mStep++;
     }
   }
-
-  // ---------- Terrain ----------
   function difficulty() { return Math.min(1, meters / 2500); }
 
   function terrainYAt(wx) {
@@ -259,8 +247,6 @@
     while (stars.length && stars[0].x < camX - 60) stars.shift();
     while (hazards.length && (hazards[0].wx < camX - 80 || hazards[0].wx > camX + W + 900)) hazards.shift();
   }
-
-  // ---------- Particles ----------
   var parts = [];
   function spawn(x, y, n, opt) {
     opt = opt || {};
@@ -298,8 +284,6 @@
     }
     ctx.globalAlpha = 1;
   }
-
-  // ---------- Background ----------
   var bgStars = [];
   for (var i = 0; i < 70; i++) bgStars.push({ x: Math.random() * W, y: Math.random() * H * 0.8, r: rand(0.4, 1.6), p: Math.random() * 6.28 });
   var clouds = [];
@@ -365,8 +349,6 @@
     ctx.arc(x + 18 * s, y + 6 * s, 16 * s, 0, 6.2832);
     ctx.fill();
   }
-
-  // ---------- Rainbow ----------
   function drawRainbow() {
     var band = 6, total = band * RNB.length;
     // glow pass
@@ -403,8 +385,6 @@
       else ctx.lineTo(sx, y);
     }
   }
-
-  // ---------- Stars (collectibles) ----------
   function drawStarShape(cx, cy, r, rot) {
     ctx.beginPath();
     for (var i = 0; i < 10; i++) {
@@ -438,8 +418,6 @@
       ctx.restore();
     }
   }
-
-  // ---------- Unicorn ----------
   function drawUnicorn() {
     var crouch = charging * 6;
     var sq = 1, sy = 1;
@@ -553,8 +531,6 @@
       ctx.beginPath(); ctx.arc(fx, fy, 3, 0, 6.2832); ctx.fill();
     }
   }
-
-  // ---------- Shatter pieces ----------
   function updateShards(dt) {
     var G = 1300;                          // local-space gravity
     var floorOn = (uy + 20) <= terrainYAt(camX) + 40; // unicorn was on/above the rainbow
@@ -600,8 +576,6 @@
     }
     ctx.restore();
   }
-
-  // ---------- Input ----------
   function startCharge() {
     if (state === "title" || state === "over") { startGame(); return; }
     if (state === "play" && grounded) chargeT = 0;
@@ -636,8 +610,6 @@
   });
   document.addEventListener("contextmenu", function (e) { e.preventDefault(); });
   document.addEventListener("gesturestart", function (e) { e.preventDefault(); });
-
-  // ---------- Game flow ----------
   function startGame() {
     actx();
     startMusic();
@@ -648,6 +620,7 @@
     cursor = -50; uy = terrainYAt(0) - feet; vy = 0; grounded = true;
     rot = 0; flip = false; charging = 0; chargeT = 0; landSq = 0;
     dead = false; deadT = 0; shake = 0; shards.length = 0;
+    flyers.length = 0;
     genAhead();
   }
 
@@ -674,8 +647,6 @@
     }
     if (dist > best) { best = dist; localStorage.setItem("prance_best", best); }
   }
-
-  // ---------- Update ----------
   function update(dt) {
     time += dt;
     // clouds drift always
@@ -762,9 +733,16 @@
       if (ssx < -20 || ssx > W + 20) continue;
       var dx = ssx - ux, dy = st.y - uy;
       if (dx * dx + dy * dy < 22 * 22) {
-        st.c = true; starsGot++; sStar();
+        st.c = true; sStar();
+        flyers.push({ x: ssx, y: st.y, t: 0 });
         spawn(ssx, st.y, 8, { c: "#FFE45E", sp0: 40, sp1: 140, life: 0.5, g: 120, sh: 5 });
       }
+    }
+    // flyers: arc to the HUD star icon, bank on arrival
+    for (var fi = flyers.length - 1; fi >= 0; fi--) {
+      var fl = flyers[fi];
+      fl.t = Math.min(1, fl.t + dt / 0.45);
+      if (fl.t >= 1) { starsGot++; flyers.splice(fi, 1); }
     }
 
     // hazards
@@ -786,8 +764,6 @@
   }
   // helper for idle bob so it references a stable ground
   function camX0() { return state === "play" ? camX : 0; }
-
-  // ---------- Hazards ----------
   function updateHazards(dt) {
     for (var i = hazards.length - 1; i >= 0; i--) {
       var h = hazards[i];
@@ -841,8 +817,6 @@
     }
     return false;
   }
-
-  // ---------- UI ----------
   function drawTrail() {
     if (trail.length < 2) return;
     var pts = [];
@@ -883,6 +857,16 @@
     ctx.font = "bold 18px system-ui, sans-serif";
     ctx.fillText("⭐ " + starsGot, W - 14, 32);
     ctx.textAlign = "left";
+    drawFlyers();
+  }
+
+  function drawFlyers() {
+    for (var i = 0; i < flyers.length; i++) {
+      var fl = flyers[i];
+      ctx.fillStyle = "#FFE45E";
+      drawStarShape(fl.x + (STX - fl.x) * fl.t, fl.y + (STY - fl.y) * fl.t, 8 + (1 - fl.t) * 4, time * 3);
+      ctx.fill();
+    }
   }
 
   function roundRect(x, y, w, h, r) {
@@ -1020,8 +1004,6 @@
     ctx.fillStyle = "#4DE8FF"; ctx.fillText(" by Badankan", cx, cyy);
     ctx.globalAlpha = 1;
   }
-
-  // ---------- Hazard drawing ----------
   function drawHazards() {
     for (var i = 0; i < hazards.length; i++) {
       var h = hazards[i], sx = ux + (h.wx - camX);
@@ -1159,14 +1141,13 @@
       }
     }
   }
-
-  // ---------- Render ----------
   function render() {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, canvas.width, canvas.height); // transparent -> page sky shows in letterbox bars
+    ctx.clearRect(0, 0, canvas.width, canvas.height); // transparent -> sky shows in letterbox
     var shx = 0, shy = 0;
     if (shake > 0) { shx = rand(-shake, shake); shy = rand(-shake, shake); }
     ctx.setTransform(scale, 0, 0, scale, offX + shx * scale, shy * scale);
+    // translate so the ground sits at GROUND_ANCHOR; the camera follows the unicorn's height
 
     drawSky();
     drawMountains();
@@ -1189,8 +1170,6 @@
     if (state === "title") drawTitle();
     if (state === "over") drawOver();
   }
-
-  // ---------- Loop ----------
   var last = performance.now();
   function frame(now) {
     var dt = (now - last) / 1000;
