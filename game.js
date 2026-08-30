@@ -225,7 +225,7 @@
     if (stageAllows(4)) opts.push(4);
     if (!opts.length) return;
     if (Math.random() > 0.7) return;
-    var wx = (a + b) / 2 + rand(-(b - a) * 0.18, (b - a) * 0.18);
+    var wx = Math.max(camX + W + 40, (a + b) / 2 + rand(-(b - a) * 0.18, (b - a) * 0.18));
     if (lastHazardX && wx - lastHazardX < 160) return;
     spawnHazard(opts[(Math.random() * opts.length) | 0], wx);
     lastHazardX = wx;
@@ -712,7 +712,7 @@
     genAhead();
     // guarantee the player meets at least one enemy early, so they learn hazards exist
     if (!firstRoller && meters >= 140) {
-      spawnHazard(1, camX + W * 0.6);
+      spawnHazard(1, camX + W + 160);
       firstRoller = true;
     }
 
