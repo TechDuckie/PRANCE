@@ -196,7 +196,7 @@
   function stageAllows(t) {
     if (t === 1) return meters >= 180;
     if (t === 2) return meters >= 450;
-    if (t === 3) return meters >= 900;
+    if (t === 3) return meters >= 600;
     if (t === 4) return meters >= 1400;
     if (t === 5) return meters >= 300;
     return false;
@@ -584,9 +584,13 @@
   // ==== Input & Game flow ====
   function startCharge(e) {
     if (state === "over") {
-      // bottom area = rainbow candy respawn, anywhere else = restart
-      if (candies > 0 && e && e.offsetY > window.innerHeight * 0.72) { respawn(); return; }
-      startGame(); return;
+      if (e) {
+        var cy = e.offsetY, cx = e.offsetX, iw = window.innerWidth, ih = window.innerHeight;
+        var cm = Math.abs(cx - iw / 2) < iw * 0.18; // must tap the centered button
+        if (cy > ih * 0.62 && cy < ih * 0.74 && cm) { startGame(); return; }
+        if (candies > 0 && cy > ih * 0.74 && cy < ih * 0.86 && cm) { respawn(); return; }
+      }
+      return;
     }
     if (state === "title") { startGame(); return; }
     if (state === "play" && grounded) chargeT = 0;
@@ -829,7 +833,7 @@
         h.cd -= dt;
         var sx = ux + (h.wx - camX);
         if (h.cd <= 0 && sx > 0 && sx < W) {
-          shots.push({ wx: h.wx - 12, y: h.y });
+          shots.push({ wx: h.wx - 12, y: h.y, vy: 75 });
           h.cd = rand(1.4, 2.4);
         }
       } else if (h.type === 4) {
@@ -842,6 +846,7 @@
     }
     for (var j = shots.length - 1; j >= 0; j--) {
       shots[j].wx -= 230 * dt;
+      if (shots[j].vy) shots[j].y += shots[j].vy * dt;
       if (shots[j].wx < camX - 40) shots.splice(j, 1);
     }
   }
@@ -857,7 +862,7 @@
         var hy = h.base - 30 + Math.sin(time * h.spd + h.phase) * h.amp;
         if ((ux - sx) * (ux - sx) + (uy - hy) * (uy - hy) < (R + 9) * (R + 9)) return true;
       } else if (h.type === 3) {
-        if ((ux - sx) * (ux - sx) + (uy - h.y) * (uy - h.y) < (R + 9) * (R + 9)) return true;
+        if ((ux - sx) * (ux - sx) + (uy - h.y) * (uy - h.y) < (R + 4) * (R + 4)) return true;
       } else if (h.type === 4 && h.st === "strike") {
         var top = h.y + 10, bot = terrainYAt(h.wx) - 34;
         if (Math.abs(ux - sx) < 8 + R && uy > top - 30 && uy < bot) return true;
@@ -951,8 +956,6 @@
     
     var rx1 = W + 40 - ((time * 110) % (W + 120));
     drawRoller(rx1, H * 0.62, -time * 5);
-    var rx2 = W + 40 - (((time + 2.3) * 110) % (W + 120));
-    drawRoller(rx2, H * 0.46, -time * 5);
     var hx = W + 40 - (((time * 80 + 1.1 * (W + 120)) % (W + 120)));
     drawHopper(hx, H * 0.5 + Math.abs(Math.sin(time * 3)) * 18);
     for (var i = 0; i < 3; i++) {
@@ -963,6 +966,22 @@
       ctx.fillStyle = "#FFE45E"; drawStarShape(sx, sy, 7, time + i); ctx.fill();
       ctx.fillStyle = "#FFF3A8"; drawStarShape(sx, sy, 3.5, time + i); ctx.fill();
       ctx.restore();
+    }
+  }
+  // foreground shadow shooter: flies in front of text, fires pink orbs downward
+  function drawParadeShooter() {
+    var shx = W + 30 - ((time * 95) % (W + 100));
+    var shy = H * 0.46 + Math.sin(time * 2.4) * 14;
+    drawShooter(shx, shy);
+    var shp = (time % 1.4) / 1.4; // downward-angled pink shot every ~1.4s
+    if (shp < 0.8) {
+      var px = shx - shp * 130, py = shy + shp * 40, al = 1 - shp * 1.15;
+      ctx.save(); ctx.globalAlpha = Math.max(0, al);
+      ctx.shadowColor = "#FF5DFF"; ctx.shadowBlur = 12;
+      ctx.fillStyle = "#FF5DFF"; ctx.beginPath(); ctx.arc(px, py, 5, 0, 6.2832); ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = "rgba(255,93,255,0.28)"; ctx.beginPath(); ctx.arc(px, py, 8, 0, 6.2832); ctx.fill();
+      ctx.restore(); ctx.globalAlpha = 1;
     }
   }
   function drawTitle() {
@@ -1002,6 +1021,8 @@
     ctx.font = "15px system-ui, sans-serif";
     ctx.fillText("hold longer = jump higher", W / 2, H * 0.8 + 26);
 
+    drawParadeShooter();
+
     
     ctx.textAlign = "left";
     ctx.globalAlpha = 0.8;
@@ -1021,8 +1042,6 @@
     g.addColorStop(0.5, "rgba(18,10,45,0.18)");
     g.addColorStop(1, "rgba(18,10,45,0.36)");
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-
-    drawTitleParade();
 
     ctx.textAlign = "center";
     
@@ -1156,13 +1175,14 @@
   }
   function drawShooter(x, y) {
     ctx.save();
-    ctx.shadowColor = "#C45CFF"; ctx.shadowBlur = 12;
-    ctx.fillStyle = "#33205F"; ctx.beginPath(); ctx.arc(x, y, 12, 0, 6.2832); ctx.fill();
+    ctx.translate(x, y); ctx.scale(1.3, 1.3); ctx.scale(-1, 1); // bigger + face left
+    ctx.shadowColor = "#D97FFF"; ctx.shadowBlur = 12;
+    ctx.fillStyle = "#4A2A80"; ctx.beginPath(); ctx.arc(0, 0, 12, 0, 6.2832); ctx.fill();
     ctx.shadowBlur = 0;
-    ctx.fillStyle = "#6335A8"; ctx.beginPath(); ctx.arc(x - 3, y - 3, 5, 0, 6.2832); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(x - 10, y); ctx.lineTo(x - 18, y - 6); ctx.lineTo(x - 12, y + 4); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = "#FFFFFF"; ctx.beginPath(); ctx.arc(x + 2, y, 4, 0, 6.2832); ctx.fill();
-    ctx.fillStyle = "#FF5DFF"; ctx.beginPath(); ctx.arc(x + 2, y, 2, 0, 6.2832); ctx.fill();
+    ctx.fillStyle = "#7D4BD1"; ctx.beginPath(); ctx.arc(-3, -3, 5, 0, 6.2832); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-10, 0); ctx.lineTo(-18, -6); ctx.lineTo(-12, 4); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#FFFFFF"; ctx.beginPath(); ctx.arc(2, 0, 4, 0, 6.2832); ctx.fill();
+    ctx.fillStyle = "#FF5DFF"; ctx.beginPath(); ctx.arc(2, 0, 2, 0, 6.2832); ctx.fill();
     ctx.restore();
   }
   function drawStorm(x, y, st, wx) {
