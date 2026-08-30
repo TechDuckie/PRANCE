@@ -1,11 +1,8 @@
-/* PRANCE 🦄🌈 — JS13kGames 2026
- * Unicorns & Rainbows. Mobile portrait endless runner.
- * Everything is procedural Canvas 2D. No assets. Vanilla JS.
- */
+/* PRANCE 🦄🌈 — JS13kGames 2026. Procedural Canvas 2D, no assets. */
 (function () {
   "use strict";
   var LW = 360;            // logical width (fixed)
-  var LH = 640;            // portrait design height (contain target)
+  var LH = 640;            // portrait design height
   var H = LH;              // logical height (recomputed on resize)
   var W = LW;
   var canvas = document.getElementById("game");
@@ -19,10 +16,10 @@
     canvas.style.height = ch + "px";
     canvas.width = Math.round(cw * dpr);
     canvas.height = Math.round(ch * dpr);
-    scale = (cw * dpr) / LW;            // fill width (mobile portrait)
+    scale = (cw * dpr) / LW;            
     H = Math.round((ch * dpr) / scale);
     offX = 0;
-    if (H < LH) {                        // wider/landscape window: contain portrait, center it
+    if (H < LH) {                        
       H = LH; scale = (ch * dpr) / LH;
       offX = Math.round((canvas.width - LW * scale) / 2);
     }
@@ -33,45 +30,49 @@
   function rand(a, b) { return a + Math.random() * (b - a); }
   function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
   function lerp(a, b, t) { return a + (b - a) * t; }
+  // ==== World state ====
   var RNB = ["#FF4D6D", "#FF9F43", "#FFE45E", "#65E572", "#38D9FF", "#4D8DFF", "#A855F7"];
   var BODY = "#F7F2FF", SHAD = "#D8C8F2";
   var MANE = ["#FF4FA3", "#FF9A3C", "#FFE45C", "#4DE8FF", "#A96CFF"];
   var HORN = "#FFE45C", EYE = "#21153D";
-  var state = "title"; // title | play | over
-  var camX = 0;        // world scroll (px)
+  var state = "title"; 
+  var camX = 0;        
   var speed = 0;
   var meters = 0;
-  var dist = 0;        // floor(meters)
+  var dist = 0;        
   var starsGot = 0;
-  var flyers = [];     // fly-to-icon star anims
+  var flyers = [];     
+  var candies = 0;     // unused respawns (rainbow candies)
+  var cpN = 0;         // checkpoints passed (each = 500m)
+  var starFlash = 0;   // gold star-icon flash timer (every 50 stars)
   var best = +(localStorage.getItem("prance_best") || 0);
 
-  var gaps = [];       // {a,b} world x gap ranges
-  var stars = [];      // {x,y,c,p}
-  var cursor = 0;      // generation cursor (world x)
-  var hazards = [];    // enemies/hazards {type, wx, ...}
-  var shots = [];      // projectiles {wx, y}
-  var lastHazardX = 0; // spacing control
-  var hiJump = false;  // high-jump landing shake flag
-  var firstRoller = false; // guaranteed intro enemy
-  var STX = W - 30, STY = 24; // HUD star icon
+  var gaps = [];       
+  var stars = [];      
+  var cursor = 0;      
+  var hazards = [];    
+  var shots = [];      
+  var lastHazardX = 0; 
+  var hiJump = false;  
+  var firstRoller = false; 
+  var STX = W - 30, STY = 24; 
 
-  var ux = 90;         // unicorn screen x (left third)
-  var uy = 0;          // unicorn body-center y
+  var ux = 90;         
+  var uy = 0;          
   var vy = 0;
   var grounded = true;
-  var feet = 20;       // body center -> feet distance
-  var rot = 0;         // flip rotation
+  var feet = 20;       
+  var rot = 0;         
   var flip = false;
-  var charging = 0;    // 0..1 charge
+  var charging = 0;    
   var chargeT = 0;
   var runPhase = 0;
-  var landSq = 0;      // landing squash timer
+  var landSq = 0;      
   var airT = 0, airDur = 0;
   var dead = false, deadT = 0;
   var shards = [];
   var groundLocal = 0;
-  // unicorn parts: [ox,oy,color,kind,size]; kind: 0tail 1leg 2body 3head 4muzzle 5ear 6horn 7eye 8mane
+  
   var uParts = [
     [-70, -28, MANE[0], 0, 8], [-17, -4, BODY, 1, 14], [3, -2, BODY, 1, 14],
     [-1, -18, BODY, 2, 30], [46, -55, BODY, 3, 22], [62, -49, BODY, 4, 12], [39, -74, BODY, 5, 8],
@@ -82,10 +83,11 @@
   var pointerDown = false;
   var shake = 0;
   var time = 0;
-  var trail = [];     // high-jump trail points
+  var trail = [];     
   var camOffY = 0;
   var GROUND_ANCHOR = 0.62;
   var AC = null;
+  // ==== Audio (procedural) ====
   function actx() {
     if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { } }
     if (AC && AC.state === "suspended") AC.resume();
@@ -110,11 +112,11 @@
   function sFlip() { beep(660, 0.12, "triangle", 0.04, 990); }
   function sBolt() { beep(200, 0.18, "sawtooth", 0.05, 80); }
   var musicOn = false, mGain = null, mNext = 0, mStep = 0;
-  var BPM = 128, MSTEP = 60 / BPM / 2;   // eighth notes
+  var BPM = 128, MSTEP = 60 / BPM / 2;   
   var MUSVOL = 0.05;
-  var BASE = 523.25;                      // C5
+  var BASE = 523.25;                      
   function mFreq(s) { return BASE * Math.pow(2, s / 12); }
-  // three happy phrase variations (semitone offsets from C5, -1 = rest)
+  
   var MEL = [
     [4, 7, 0, 7, 4, 9, 4, -1, 7, 0, 7, 4, 9, 4, 7, 0],
     [0, 2, 4, 7, 9, 7, 4, 2, 0, 2, 4, 9, 12, 9, 7, 4],
@@ -139,7 +141,7 @@
   function musicTick() {
     if (!musicOn) return;
     var a = AC; if (!a) return;
-    if (mNext < a.currentTime - 0.1) mNext = a.currentTime + 0.05; // avoid catch-up burst
+    if (mNext < a.currentTime - 0.1) mNext = a.currentTime + 0.05; 
     var look = a.currentTime + 0.2;
     while (mNext < look) {
       var s = mStep % 16;
@@ -147,7 +149,7 @@
       var m = MEL[ph][s];
       if (m >= 0) mNote(mFreq(m), mNext, MSTEP * 0.95, "square", 0.7);
       var b = BASS[s];
-      if (b >= 0) mNote(mFreq(b) / 2, mNext, MSTEP * 0.95, "triangle", 0.5); // bass an octave down
+      if (b >= 0) mNote(mFreq(b) / 2, mNext, MSTEP * 0.95, "triangle", 0.5); 
       mNext += MSTEP; mStep++;
     }
   }
@@ -172,20 +174,20 @@
 
   function placeStars(a, b) {
     var t = Math.random();
-    if (t < 0.4) { // ground row — hug the surface at each star's own x
+    if (t < 0.4) { 
       var n = 3 + (Math.random() * 3 | 0), st = (b - a) / n;
       for (var i = 0; i < n; i++) {
         var x = a + st * (i + 0.5);
         addStar(x, terrainYAt(x) - 28);
       }
-    } else if (t < 0.75) { // arc — capped so it stays reachable
+    } else if (t < 0.75) { 
       var m = 5, s2 = (b - a) / m, h = Math.min(150, 40 + Math.random() * 60);
       for (var j = 0; j < m; j++) {
         var tt = j / (m - 1);
         var ax = a + s2 * j;
         addStar(ax, terrainYAt(ax) - 26 - Math.sin(tt * Math.PI) * h);
       }
-    } else { // single high
+    } else { 
       var sx2 = (a + b) / 2;
       addStar(sx2, terrainYAt(sx2) - 40 - Math.random() * 22);
     }
@@ -232,22 +234,23 @@
         var a = cursor, b = cursor + gl;
         gaps.push({ a: a, b: b });
         if (Math.random() < 0.6) {
-          addStar((a + b) / 2, terrainYAt(a) - 110 - rand(0, 30)); // high-risk star
+          addStar((a + b) / 2, terrainYAt(a) - 110 - rand(0, 30)); 
         }
         cursor += gl;
-        // spike cluster (small-long-small) on the solid ground just after the gap
+        
         if (stageAllows(5) && Math.random() < 0.6) {
           var sp = 16, sl = [26 + Math.random() * 8, 44 + Math.random() * 12, 26 + Math.random() * 8];
           for (var si = 0; si < 3; si++) hazards.push({ type: 5, wx: cursor + 18 + si * sp, len: sl[si] });
         }
       }
     }
-    // prune behind
+    
     while (gaps.length && gaps[0].b < camX - 60) gaps.shift();
     while (stars.length && stars[0].x < camX - 60) stars.shift();
     while (hazards.length && (hazards[0].wx < camX - 80 || hazards[0].wx > camX + W + 900)) hazards.shift();
   }
   var parts = [];
+  // ==== Particles ====
   function spawn(x, y, n, opt) {
     opt = opt || {};
     for (var i = 0; i < n; i++) {
@@ -289,6 +292,7 @@
   var clouds = [];
   for (var c = 0; c < 5; c++) clouds.push({ x: Math.random() * W, y: rand(H * 0.12, H * 0.45), s: rand(0.7, 1.4), sp: rand(6, 16) });
 
+  // ==== Background ====
   function drawSky() {
     var g = ctx.createLinearGradient(0, 0, 0, H);
     g.addColorStop(0, "#120C35");
@@ -297,14 +301,14 @@
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
 
-    // moon
+    
     ctx.save();
     ctx.shadowColor = "#fff4cf"; ctx.shadowBlur = 30;
     ctx.fillStyle = "#FFF1C9";
     ctx.beginPath(); ctx.arc(W - 56, H * 0.16, 20, 0, 6.2832); ctx.fill();
     ctx.restore();
 
-    // bg stars
+    
     for (var i = 0; i < bgStars.length; i++) {
       var s = bgStars[i];
       var a = 0.35 + Math.sin(time * 1.5 + s.p) * 0.3;
@@ -351,7 +355,7 @@
   }
   function drawRainbow() {
     var band = 6, total = band * RNB.length;
-    // glow pass
+    
     ctx.save();
     ctx.lineCap = "round"; ctx.lineJoin = "round";
     ctx.strokeStyle = "rgba(255,255,255,0.07)";
@@ -360,7 +364,7 @@
     ctx.stroke();
     ctx.restore();
 
-    // bands, centered on the running surface (terrainYAt) so the unicorn runs mid-rainbow
+    
     ctx.save();
     ctx.lineCap = "round"; ctx.lineJoin = "round";
     var mid = (RNB.length - 1) / 2;
@@ -405,36 +409,37 @@
       var rot = time * 1.5 + s.p;
       ctx.save();
       ctx.shadowColor = "#FFE45E"; ctx.shadowBlur = 12;
-      // soft glow
+      
       ctx.fillStyle = "rgba(255,228,94,0.25)";
       drawStarShape(sx, s.y, r * 1.9, rot); ctx.fill();
-      // bright body (no outline)
+      
       ctx.shadowBlur = 0;
       ctx.fillStyle = "#FFE45E";
       drawStarShape(sx, s.y, r, rot); ctx.fill();
-      // lighter center for a cartoon pop
+      
       ctx.fillStyle = "#FFF3A8";
       drawStarShape(sx, s.y, r * 0.5, rot); ctx.fill();
       ctx.restore();
     }
   }
+  // ==== Unicorn ====
   function drawUnicorn() {
     var crouch = charging * 6;
     var sq = 1, sy = 1;
     if (landSq > 0) { sq = 1 + landSq * 0.35; sy = 1 - landSq * 0.3; }
     var US = 0.7;
-    var sw = Math.sin(runPhase) * 8;          // running leg swing
+    var sw = Math.sin(runPhase) * 8;          
     var bob = Math.abs(Math.sin(runPhase)) * 2;
-    var wind = Math.sin(time * 9) * 2;        // mane/tail flow
+    var wind = Math.sin(time * 9) * 2;        
 
     ctx.save();
     ctx.translate(ux, uy + crouch - bob);
     ctx.rotate(rot);
     ctx.scale(US * sq, US * sy);
-    ctx.translate(0, 21);                      // align spec feet with the ground
+    ctx.translate(0, 21);                      
     ctx.lineCap = "round"; ctx.lineJoin = "round";
 
-    // 1. TAIL — rainbow ribbons flowing back
+    
     ctx.lineWidth = 8;
     ctx.strokeStyle = MANE[0]; ctx.beginPath(); ctx.moveTo(-29, -28); ctx.bezierCurveTo(-48 + wind, -32, -56 + wind, -45, -69, -42); ctx.bezierCurveTo(-76 + wind, -40, -80 + wind, -35, -84, -30); ctx.stroke();
     ctx.strokeStyle = MANE[1]; ctx.beginPath(); ctx.moveTo(-29, -27); ctx.bezierCurveTo(-48 + wind, -30, -57 + wind, -40, -71, -37); ctx.bezierCurveTo(-78 + wind, -35, -82 + wind, -30, -87, -26); ctx.stroke();
@@ -442,12 +447,12 @@
     ctx.strokeStyle = MANE[3]; ctx.beginPath(); ctx.moveTo(-31, -21); ctx.bezierCurveTo(-49 + wind, -22, -60 + wind, -30, -73, -27); ctx.bezierCurveTo(-81 + wind, -25, -85 + wind, -20, -91, -16); ctx.stroke();
     ctx.strokeStyle = MANE[4]; ctx.beginPath(); ctx.moveTo(-31, -18); ctx.bezierCurveTo(-49 + wind, -18, -61 + wind, -25, -75, -21); ctx.bezierCurveTo(-82 + wind, -19, -87 + wind, -14, -93, -10); ctx.stroke();
 
-    // 2. REAR LEGS — straight, swinging back and forth
+    
     ctx.strokeStyle = BODY; ctx.lineWidth = 8;
     leg(-17, -15, -sw, 23);
     leg(3, -12, sw, 20);
 
-    // 3. BODY
+    
     ctx.fillStyle = BODY;
     ctx.beginPath();
     ctx.moveTo(-30, -38);
@@ -457,22 +462,22 @@
     ctx.bezierCurveTo(-43, -20, -42, -31, -30, -38);
     ctx.closePath(); ctx.fill();
 
-    // 4. BODY SHADOW
+    
     ctx.fillStyle = SHAD;
     ctx.beginPath(); ctx.ellipse(-1, -11, 28, 10, 0, 0, Math.PI); ctx.fill();
 
-    // 5. NECK
+    
     ctx.fillStyle = BODY;
     ctx.beginPath();
     ctx.moveTo(17, -30); ctx.lineTo(30, -54); ctx.lineTo(46, -48); ctx.lineTo(34, -17);
     ctx.closePath(); ctx.fill();
 
-    // 6. FRONT LEGS — straight, swinging back and forth
+    
     ctx.strokeStyle = BODY; ctx.lineWidth = 8;
     leg(20, -18, sw, 20);
     leg(14, -16, -sw, 20);
 
-    // 7. MANE — rainbow ribbons flowing back
+    
     ctx.lineWidth = 7;
     ctx.strokeStyle = MANE[0]; ctx.beginPath(); ctx.moveTo(34, -67); ctx.bezierCurveTo(19 + wind, -72, 9 + wind, -63, 3, -53); ctx.stroke();
     ctx.strokeStyle = MANE[1]; ctx.beginPath(); ctx.moveTo(31, -62); ctx.bezierCurveTo(17 + wind, -67, 5 + wind, -58, -3, -48); ctx.stroke();
@@ -480,7 +485,7 @@
     ctx.strokeStyle = MANE[3]; ctx.beginPath(); ctx.moveTo(29, -55); ctx.bezierCurveTo(15 + wind, -60, 5 + wind, -52, -5, -42); ctx.stroke();
     ctx.strokeStyle = MANE[4]; ctx.beginPath(); ctx.moveTo(28, -51); ctx.bezierCurveTo(14 + wind, -55, 4 + wind, -47, -7, -37); ctx.stroke();
 
-    // 8. HEAD
+    
     ctx.fillStyle = BODY;
     ctx.beginPath();
     ctx.moveTo(25, -55);
@@ -490,17 +495,17 @@
     ctx.bezierCurveTo(34, -42, 28, -47, 25, -55);
     ctx.closePath(); ctx.fill();
 
-    // 9. MUZZLE
+    
     ctx.fillStyle = BODY;
     ctx.beginPath(); ctx.ellipse(62, -49, 12, 8, 0, 0, 6.2832); ctx.fill();
 
-    // 10. EAR
+    
     ctx.fillStyle = BODY;
     ctx.beginPath(); ctx.moveTo(35, -67); ctx.lineTo(33, -81); ctx.lineTo(44, -71); ctx.closePath(); ctx.fill();
     ctx.fillStyle = SHAD;
     ctx.beginPath(); ctx.moveTo(36, -70); ctx.lineTo(35, -77); ctx.lineTo(41, -72); ctx.closePath(); ctx.fill();
 
-    // 11. HORN — small golden cone
+    
     ctx.save();
     ctx.shadowColor = HORN; ctx.shadowBlur = 8;
     ctx.fillStyle = HORN;
@@ -509,13 +514,13 @@
     ctx.strokeStyle = "#FFF3A0"; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(50, -72); ctx.lineTo(53, -81); ctx.stroke();
 
-    // 12. EYE
+    
     ctx.fillStyle = EYE;
     ctx.beginPath(); ctx.arc(56, -56, 2.8, 0, 6.2832); ctx.fill();
     ctx.fillStyle = "#fff";
     ctx.beginPath(); ctx.arc(57, -57, 0.8, 0, 6.2832); ctx.fill();
 
-    // nostril
+    
     ctx.fillStyle = SHAD;
     ctx.beginPath(); ctx.arc(69, -47, 1.2, 0, 6.2832); ctx.fill();
 
@@ -532,13 +537,13 @@
     }
   }
   function updateShards(dt) {
-    var G = 1300;                          // local-space gravity
-    var floorOn = (uy + 20) <= terrainYAt(camX) + 40; // unicorn was on/above the rainbow
+    var G = 1300;                          
+    var floorOn = (uy + 20) <= terrainYAt(camX) + 40; 
     for (var i = 0; i < shards.length; i++) {
       var p = shards[i];
       p.vly += G * dt;
       p.dx += p.vlx * dt; p.dy += p.vly * dt; p.rot += p.vr * dt;
-      if (floorOn) {                        // settle on the rainbow surface
+      if (floorOn) {                        
         var floor = groundLocal - p.s * 0.5;
         if (p.oy + p.dy > floor) {
           p.dy = floor - p.oy;
@@ -559,7 +564,7 @@
     } else if (p.k === 7) {
       ctx.beginPath(); ctx.arc(0, 0, s, 0, 6.2832); ctx.fill();
       ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(s * 0.3, -s * 0.3, s * 0.3, 0, 6.2832); ctx.fill();
-    } else { // body, head, muzzle, ear, mane, tail
+    } else { 
       ctx.beginPath(); ctx.ellipse(0, 0, s, s * 0.7, 0, 0, 6.2832); ctx.fill();
     }
   }
@@ -576,8 +581,14 @@
     }
     ctx.restore();
   }
-  function startCharge() {
-    if (state === "title" || state === "over") { startGame(); return; }
+  // ==== Input & Game flow ====
+  function startCharge(e) {
+    if (state === "over") {
+      // bottom area = rainbow candy respawn, anywhere else = restart
+      if (candies > 0 && e && e.offsetY > window.innerHeight * 0.72) { respawn(); return; }
+      startGame(); return;
+    }
+    if (state === "title") { startGame(); return; }
     if (state === "play" && grounded) chargeT = 0;
     pointerDown = true;
     startMusic();
@@ -599,7 +610,7 @@
     spawn(ux, uy + feet, 6, { c: "#D8C8F2", sp0: 30, sp1: 90, life: 0.4, g: 300 });
   }
 
-  canvas.addEventListener("pointerdown", function (e) { e.preventDefault(); startCharge(); }, { passive: false });
+  canvas.addEventListener("pointerdown", function (e) { e.preventDefault(); startCharge(e); }, { passive: false });
   window.addEventListener("pointerup", function (e) { releaseCharge(); });
   window.addEventListener("pointercancel", function (e) { releaseCharge(); });
   window.addEventListener("keydown", function (e) {
@@ -621,7 +632,31 @@
     rot = 0; flip = false; charging = 0; chargeT = 0; landSq = 0;
     dead = false; deadT = 0; shake = 0; shards.length = 0;
     flyers.length = 0;
+    candies = 0; cpN = 0;
     genAhead();
+  }
+
+  // respawn at the nearest 50m mark behind the death point, on safe ground; costs one candy
+  function respawn() {
+    candies--;
+    camX = Math.floor(camX / 1200) * 1200; // 50m = 1200 world units
+    gaps.length = 0; stars.length = 0; parts.length = 0; trail.length = 0;
+    hazards.length = 0; shots.length = 0; lastHazardX = 0;
+    cursor = camX - 400;
+    dead = false; deadT = 0; shake = 0; shards.length = 0; flyers.length = 0;
+    state = "play"; firstRoller = true;
+    genAhead();
+    // slide forward until clear of gaps AND of nearby hazards (safe spot)
+    var g = 0;
+    while (g++ < 60) {
+      var bad = inGap(camX);
+      if (!bad) for (var i = 0; i < hazards.length; i++)
+        if (hazards[i].wx - camX > -20 && hazards[i].wx - camX < 160) { bad = true; break; }
+      if (!bad) break;
+      camX += 90; // slide past the obstacle to solid, clear ground
+    }
+    uy = terrainYAt(camX) - feet; vy = 0; grounded = true;
+    rot = 0; flip = false; charging = 0; chargeT = 0; landSq = 0;
   }
 
   function gameOver() {
@@ -631,37 +666,48 @@
     sDeath();
     spawn(ux, uy, 26, { c: "#FF4FA3", sp0: 60, sp1: 220, life: 0.8, g: 260, sh: 6 });
     spawn(ux, uy, 16, { c: "#4DE8FF", sp0: 40, sp1: 180, life: 0.8, g: 260 });
-    // shatter the unicorn into its real parts — each detaches from its true spot
+    
     groundLocal = (terrainYAt(camX) - uy) / 0.7 - 21;
     for (var si = 0; si < uParts.length; si++) {
       var P = uParts[si];
-      var dxp = P[0], dyp = P[1] + 20;     // vector from the unicorn's center (0,-20)
+      var dxp = P[0], dyp = P[1] + 20;     
       var d = Math.sqrt(dxp * dxp + dyp * dyp) || 1, sp = rand(40, 210);
       shards.push({
         ox: P[0], oy: P[1], col: P[2], k: P[3], s: P[4],
         dx: 0, dy: 0,
         vlx: (dxp / d) * sp + rand(-30, 30),
-        vly: (dyp / d) * sp * 0.4 - rand(60, 200), // pop up, then gravity
+        vly: (dyp / d) * sp * 0.4 - rand(60, 200), 
         rot: Math.random() * 6.2832, vr: rand(-9, 9)
       });
     }
     if (dist > best) { best = dist; localStorage.setItem("prance_best", best); }
   }
+  
+  // rainbow confetti burst marking a passed 500m checkpoint
+  function confettiBurst() {
+    for (var i = 0; i < 7; i++) {
+      spawn(ux, uy - 40, 10, { c: RNB[i], sp0: 70, sp1: 300, life: 1.3, g: 110, sh: 6 });
+      spawn(ux, uy - 40, 4, { c: MANE[i % 5], sp0: 120, sp1: 360, life: 0.8, g: 0, sh: 5 });
+    }
+    shake = 3;
+  }
+  // ==== Update ====
   function update(dt) {
     time += dt;
-    // clouds drift always
+    
     for (var i = 0; i < clouds.length; i++) {
       clouds[i].x -= clouds[i].sp * dt;
       if (clouds[i].x < -80) { clouds[i].x = W + 80; clouds[i].y = rand(H * 0.12, H * 0.45); }
     }
     if (landSq > 0) landSq = Math.max(0, landSq - dt * 4);
     if (shake > 0) shake = Math.max(0, shake - dt * 30);
+    if (starFlash > 0) starFlash = Math.max(0, starFlash - dt);
 
     if (state !== "play") {
       if (state === "title") {
-        uy = terrainYAt(camX0()) - feet + Math.sin(time * 2) * 1.5; // idle bob
+        uy = terrainYAt(camX0()) - feet + Math.sin(time * 2) * 1.5; 
       }
-      // on "over" the unicorn has shattered — let the pieces fall and settle
+      
       runPhase += dt * 8;
       updateCamera(dt);
       updateParts(dt);
@@ -669,25 +715,31 @@
       return;
     }
 
-    // charge
+    
     if (pointerDown && grounded) {
       chargeT += dt;
       charging = clamp(chargeT / 0.6, 0, 1);
     }
 
-    // speed & distance
+    
     speed = Math.min(560, 200 + meters * 0.18);
     camX += speed * dt;
     meters = camX / 24;
     dist = Math.floor(meters);
+    // rainbow candy checkpoint every 500m while alive: candy + confetti burst
+    var n = Math.floor(meters / 500);
+    if (n > cpN) {
+      for (var k = cpN + 1; k <= n; k++) { candies++; confettiBurst(); }
+      cpN = n;
+    }
     genAhead();
-    // guarantee the player meets at least one enemy early, so they learn hazards exist
+    
     if (!firstRoller && meters >= 140) {
       spawnHazard(1, camX + W + 160);
       firstRoller = true;
     }
 
-    // physics
+    
     if (!grounded) {
       vy += 1400 * dt;
       uy += vy * dt;
@@ -697,27 +749,27 @@
         if (Math.random() < 0.5) spawn(ux, uy - 4, 1, { c: MANE[(Math.random() * 5) | 0], sp0: 10, sp1: 40, life: 0.4, g: 0, sh: 4 });
       }
       var gy = terrainYAt(camX);
-      var tol = 26 + (1 - difficulty()) * 16; // forgiving early, strict late
+      var tol = 26 + (1 - difficulty()) * 16; 
       if (!inGap(camX) && vy > 0 && uy + feet >= gy && uy + feet <= gy + tol) {
-        // land
+        
         uy = gy - feet; vy = 0; grounded = true; rot = 0; flip = false;
         if (hiJump) { shake = 4; hiJump = false; }
         landSq = 1; sLand();
         spawn(ux, uy + feet, 8, { c: "#ffffff", sp0: 40, sp1: 120, life: 0.35, g: 200, ang: -1.57, spread: 1.1 });
       }
-      // high-jump trail (stored in world space so it flows left with travel)
+      
       if (flip && vy < -120) { trail.push({ wx: camX, y: uy, life: 0.45 }); }
     } else {
-      // grounded: hug terrain
+      
       var g = terrainYAt(camX);
       if (inGap(camX)) {
-        grounded = false; vy = 0; charging = 0; // run off edge
+        grounded = false; vy = 0; charging = 0; 
       } else {
         uy = g - feet;
       }
     }
 
-    // trail decay
+    
     for (var t = trail.length - 1; t >= 0; t--) {
       trail[t].life -= dt;
       if (trail[t].life <= 0) trail.splice(t, 1);
@@ -725,7 +777,7 @@
 
     runPhase += dt * (8 + speed * 0.02);
 
-    // stars collection
+    
     for (var s = 0; s < stars.length; s++) {
       var st = stars[s];
       if (st.c) continue;
@@ -738,38 +790,41 @@
         spawn(ssx, st.y, 8, { c: "#FFE45E", sp0: 40, sp1: 140, life: 0.5, g: 120, sh: 5 });
       }
     }
-    // flyers: arc to the HUD star icon, bank on arrival
+    
     for (var fi = flyers.length - 1; fi >= 0; fi--) {
       var fl = flyers[fi];
       fl.t = Math.min(1, fl.t + dt / 0.45);
-      if (fl.t >= 1) { starsGot++; flyers.splice(fi, 1); }
+      if (fl.t >= 1) {
+        starsGot++; flyers.splice(fi, 1);
+        if (starsGot % 50 === 0) { candies++; starFlash = 1; sFlip(); spawn(STX, STY, 12, { c: "#FFE45E", sp0: 60, sp1: 200, life: 0.8, g: 60, sh: 7 }); }
+      }
     }
 
-    // hazards
+    
     updateHazards(dt);
     if (checkHazards()) gameOver();
 
-    // death
+    
     if (uy > H + 40) gameOver();
 
     updateCamera(dt);
     updateParts(dt);
   }
-  // vertical camera: the world follows the unicorn so jumps feel like forward motion
+  
   function updateCamera(dt) {
     var anchor = H * GROUND_ANCHOR;
     var target = anchor - (uy + feet);
     target = clamp(target, -H * 0.22, H * 0.4);
     camOffY += (target - camOffY) * Math.min(1, dt * 5);
   }
-  // helper for idle bob so it references a stable ground
+  
   function camX0() { return state === "play" ? camX : 0; }
   function updateHazards(dt) {
     for (var i = hazards.length - 1; i >= 0; i--) {
       var h = hazards[i];
       if (h.type === 1) {
-        h.rot -= (speed + 60) * dt / 16; // roll LEFT (toward player) as it travels
-        h.wx -= 60 * dt; // drift slowly toward the player
+        h.rot -= (speed + 60) * dt / 16; 
+        h.wx -= 60 * dt; 
       } else if (h.type === 3) {
         h.cd -= dt;
         var sx = ux + (h.wx - camX);
@@ -791,7 +846,7 @@
     }
   }
   function checkHazards() {
-    var R = 12; // unicorn hit radius (smaller than visual = fair)
+    var R = 12; 
     for (var i = 0; i < hazards.length; i++) {
       var h = hazards[i], sx = ux + (h.wx - camX);
       if (sx < -40 || sx > W + 40) continue;
@@ -826,11 +881,11 @@
     ctx.lineCap = "round"; ctx.lineJoin = "round";
     for (var c = 0; c < 7; c++) {
       ctx.strokeStyle = RNB[c];
-      // soft glow pass
+      
       ctx.globalAlpha = 0.2 * pts[0].a;
       ctx.lineWidth = 18;
       strokeRibbon(pts, c);
-      // bright pass
+      
       ctx.globalAlpha = 0.95 * pts[0].a;
       ctx.lineWidth = 9;
       strokeRibbon(pts, c);
@@ -858,6 +913,19 @@
     ctx.fillText("⭐ " + starsGot, W - 14, 32);
     ctx.textAlign = "left";
     drawFlyers();
+    // big gold star pop + candy ping every 50 stars (single grow once, then fade)
+    if (starFlash > 0) {
+      var t = 1 - starFlash; // 0 -> 1 over the flash
+      var sfn = 10 + 34 * t; // grow once then hold
+      ctx.save();
+      ctx.translate(STX, STY);
+      ctx.shadowColor = "#FFE45E"; ctx.shadowBlur = 26;
+      ctx.fillStyle = "#FFE45E";
+      ctx.globalAlpha = starFlash;
+      drawStarShape(0, 0, sfn, 0); ctx.fill();
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    }
   }
 
   function drawFlyers() {
@@ -880,7 +948,7 @@
   }
 
   function drawTitleParade() {
-    // cosmetic enemies drifting across behind the title
+    
     var rx1 = W + 40 - ((time * 110) % (W + 120));
     drawRoller(rx1, H * 0.62, -time * 5);
     var rx2 = W + 40 - (((time + 2.3) * 110) % (W + 120));
@@ -898,7 +966,7 @@
     }
   }
   function drawTitle() {
-    // soft vignette so the title pops but the rainbow still glows
+    
     var g = ctx.createLinearGradient(0, 0, 0, H);
     g.addColorStop(0, "rgba(18,10,45,0.22)");
     g.addColorStop(0.5, "rgba(18,10,45,0.10)");
@@ -908,7 +976,7 @@
     drawTitleParade();
 
     ctx.textAlign = "center";
-    // big PRANCE — thick pink outline + white fill, gentle bounce
+    
     var bob = Math.sin(time * 2) * 6;
     ctx.save();
     ctx.translate(W / 2, H * 0.36 + bob);
@@ -934,7 +1002,7 @@
     ctx.font = "15px system-ui, sans-serif";
     ctx.fillText("hold longer = jump higher", W / 2, H * 0.8 + 26);
 
-    // sleek credit, bottom-left, in the rainbow palette
+    
     ctx.textAlign = "left";
     ctx.globalAlpha = 0.8;
     ctx.font = "12px system-ui, sans-serif";
@@ -957,7 +1025,7 @@
     drawTitleParade();
 
     ctx.textAlign = "center";
-    // GAME OVER — pink outline + white fill, gentle bounce (matches title)
+    
     var bob = Math.sin(time * 2) * 5;
     ctx.save();
     ctx.translate(W / 2, H * 0.3 + bob);
@@ -969,7 +1037,7 @@
     ctx.fillStyle = "#fff"; ctx.fillText("GAME OVER", 0, 0);
     ctx.restore();
 
-    // stats, on-theme colors
+    
     ctx.fillStyle = "#fff"; ctx.font = "bold 30px system-ui, sans-serif";
     ctx.fillText(dist + " m", W / 2, H * 0.45);
     ctx.fillStyle = "#FFE45E"; ctx.font = "20px system-ui, sans-serif";
@@ -977,7 +1045,7 @@
     ctx.fillStyle = "#4DE8FF"; ctx.font = "16px system-ui, sans-serif";
     ctx.fillText("BEST  " + best + " m", W / 2, H * 0.45 + 56);
 
-    // cute restart button — pink fill, white thick outline, gentle pulse
+    
     var bw = 200, bh = 56;
     var pulse = 1 + Math.sin(time * 3) * 0.03;
     ctx.save();
@@ -993,7 +1061,25 @@
     ctx.fillText("↻  PLAY AGAIN", 0, 8);
     ctx.restore();
 
-    // sleek credit, bottom-left, matches the menu
+    if (candies > 0) {
+      
+      var br = 200, bhr = 48;
+      ctx.save();
+      ctx.translate(W / 2, H * 0.78 + bhr / 2);
+      ctx.globalAlpha = 0.85 + Math.sin(time * 3) * 0.15;
+      ctx.shadowColor = "#FFE45E"; ctx.shadowBlur = 16;
+      ctx.fillStyle = "#FFE45E";
+      roundRect(-br / 2, -bhr / 2, br, bhr, 16); ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.lineWidth = 3; ctx.strokeStyle = "#fff";
+      roundRect(-br / 2, -bhr / 2, br, bhr, 16); ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = "#fff"; ctx.font = "bold 20px system-ui, sans-serif";
+      ctx.fillText("🌈 RESPAWN (" + candies + ")", 0, 7);
+      ctx.restore();
+    }
+
+    
     ctx.textAlign = "left";
     ctx.globalAlpha = 0.8; ctx.font = "12px system-ui, sans-serif";
     var cx = 14, cyy = H - 14;
@@ -1029,9 +1115,9 @@
   function drawRoller(x, y, rot) {
     ctx.save(); ctx.translate(x, y); ctx.rotate(rot);
     ctx.lineJoin = "round";
-    // soft glow so it pops
+    
     ctx.shadowColor = "#C77DFF"; ctx.shadowBlur = 12;
-    // bright cartoon spikes (no outlines), radiating from the ball
+    
     for (var k = 0; k < 8; k++) {
       var a = k / 8 * 6.2832;
       var b0x = Math.cos(a - 0.2) * 15, b0y = Math.sin(a - 0.2) * 15;
@@ -1041,14 +1127,14 @@
       ctx.moveTo(b0x, b0y); ctx.lineTo(tx, ty); ctx.lineTo(b1x, b1y); ctx.closePath();
       ctx.fillStyle = "#FF4FA3"; ctx.fill();
     }
-    // bright ball body
+    
     ctx.beginPath(); ctx.arc(0, 0, 17, 0, 6.2832);
     ctx.fillStyle = "#A96CFF"; ctx.fill();
     ctx.shadowBlur = 0;
-    // lighter top crescent for cartoon shading
+    
     ctx.beginPath(); ctx.arc(0, 0, 17, Math.PI * 1.05, Math.PI * 1.95);
     ctx.fillStyle = "#D7A6FF"; ctx.fill();
-    // glossy highlight
+    
     ctx.beginPath(); ctx.arc(-5, -6, 6, 0, 6.2832);
     ctx.fillStyle = "rgba(255,255,255,0.7)"; ctx.fill();
     ctx.restore();
@@ -1120,14 +1206,14 @@
     return "#FFFFFF";
   }
   function drawJumpMeter() {
-    if (charging <= 0.001) return; // only while charging
-    var hy = uy + camOffY;                 // horse feet in screen space
+    if (charging <= 0.001) return; 
+    var hy = uy + camOffY;                 
     var bw = 14, bh = 80, bx = ux - 56, by = hy - bh - 8, r = 3;
-    // track
+    
     ctx.fillStyle = "rgba(20,12,40,0.55)"; roundRect(bx, by, bw, bh, r); ctx.fill();
-    // pink outline
+    
     ctx.lineWidth = 3; ctx.strokeStyle = "#FF4FA3"; roundRect(bx, by, bw, bh, r); ctx.stroke();
-    // fill bottom-up by charge (jump height)
+    
     var fh = bh * clamp(charging, 0, 1);
     ctx.fillStyle = chargingColor(charging);
     if (charging > 0.9) { ctx.shadowColor = "#fff"; ctx.shadowBlur = 12; }
@@ -1141,19 +1227,20 @@
       }
     }
   }
+  // ==== Render ====
   function render() {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, canvas.width, canvas.height); // transparent -> sky shows in letterbox
+    ctx.clearRect(0, 0, canvas.width, canvas.height); 
     var shx = 0, shy = 0;
     if (shake > 0) { shx = rand(-shake, shake); shy = rand(-shake, shake); }
     ctx.setTransform(scale, 0, 0, scale, offX + shx * scale, shy * scale);
-    // translate so the ground sits at GROUND_ANCHOR; the camera follows the unicorn's height
+    
 
     drawSky();
     drawMountains();
     drawClouds();
 
-    // gameplay layer follows the unicorn vertically so jumps move with it
+    
     ctx.save();
     ctx.translate(0, camOffY);
     drawRainbow();
@@ -1174,13 +1261,13 @@
   function frame(now) {
     var dt = (now - last) / 1000;
     last = now;
-    if (dt > 0.05) dt = 0.05; // clamp big gaps
+    if (dt > 0.05) dt = 0.05; 
     update(dt);
     musicTick();
     render();
     requestAnimationFrame(frame);
   }
-  // init idle scene
+  
   uy = terrainYAt(0) - feet;
   genAhead();
   requestAnimationFrame(frame);
