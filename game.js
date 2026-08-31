@@ -504,10 +504,10 @@
     ctx.strokeStyle = "#FFF3A0"; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(50, -72); ctx.lineTo(53, -81); ctx.stroke();
 
-    ctx.fillStyle = EYE;
-    ctx.beginPath(); ctx.arc(56, -56, 2.8, 0, 6.2832); ctx.fill();
-    ctx.fillStyle = "#fff";
-    ctx.beginPath(); ctx.arc(57, -57, 0.8, 0, 6.2832); ctx.fill();
+    ctx.strokeStyle = EYE;
+    if (flip) { ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(56, -59, 2.4, .2, 3); ctx.stroke(); }
+    else { ctx.fillStyle = EYE; ctx.beginPath(); ctx.arc(56, -56, 2.8, 0, 6.2832); ctx.fill(); ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(57, -57, 0.8, 0, 6.2832); ctx.fill(); }
+    ctx.lineWidth = 1.7; ctx.beginPath(); ctx.arc(59, -44, 3.8, .15, 3); ctx.stroke();
 
     ctx.fillStyle = SHAD;
     ctx.beginPath(); ctx.arc(69, -47, 1.2, 0, 6.2832); ctx.fill();
@@ -937,10 +937,11 @@
   }
 
   function drawHUD() {
-    ctx.textAlign = "left"; ctx.fillStyle = "#FFF8EE";
-    ctx.font = "800 21px system-ui"; ctx.fillText(dist + " m", 24, 32);
-    ctx.fillStyle = "rgba(36,22,79,.82)"; roundRect(capX, capY, capW, capH, 14); ctx.fill();
-    ctx.lineWidth = 1.5; ctx.strokeStyle = "rgba(111,91,168,.45)"; roundRect(capX, capY, capW, capH, 14); ctx.stroke();
+    var mt = dist + " m", mw = ctx.measureText(mt).width + 24, mx = 14, my = 14, mh = 34;
+    cu(mx, my, mw, mh);
+    ctx.fillStyle = "#FFF8EE"; ctx.font = "800 21px system-ui"; ctx.textAlign = "center";
+    ctx.fillText(mt, mx + mw / 2, my + 23);
+    cu(capX, capY, capW, capH);
     var sc = 1 + starPulse * .15;
     ctx.save(); ctx.translate(STX, STY); ctx.scale(sc, sc);
     ctx.fillStyle = "#FFD83D"; drawStarShape(0, 0, 9, -0.5); ctx.fill();
@@ -957,12 +958,10 @@
     }
   }
   function drawBonus() {
-    var bw = Math.min(W * .32, 180), bh = 14, bx = W / 2 - bw / 2, by = 26;
+    var bw = Math.min(W * .3, 170), bh = 22, bx = W / 2 - bw / 2, by = 20;
     var ready = bonus >= 1 && !bonusOn;
-    ctx.fillStyle = "rgba(36,22,79,.88)"; roundRect(bx, by, bw, bh, 8); ctx.fill();
-    ctx.lineWidth = 1.5; ctx.strokeStyle = "rgba(111,91,168,.45)"; roundRect(bx, by, bw, bh, 8); ctx.stroke();
+    cu(bx, by, bw, bh);
     var ix = bx + 3, iy = by + 3, iw = bw - 6, ih = bh - 6;
-    ctx.fillStyle = "rgba(255,255,255,.10)"; roundRect(ix, iy, iw, ih, 5); ctx.fill();
     if (bonusV > .004) {
       ctx.save(); roundRect(ix, iy, iw, ih, 5); ctx.clip();
       var g = ctx.createLinearGradient(ix, 0, ix + iw, 0);
@@ -973,6 +972,10 @@
     }
     var fl = ready ? .3 + .7 * Math.abs(Math.sin(time * 8)) : 0;
     ctx.fillStyle = "rgba(255,255,255," + fl.toFixed(2) + ")"; roundRect(ix, iy, iw, ih, 5); ctx.fill();
+    if (ready) {
+      ctx.textAlign = "center"; ctx.fillStyle = "#FFE45E"; ctx.font = "800 13px system-ui";
+      ctx.fillText("DOUBLE TAP ❤", W / 2, by + bh + 18);
+    }
   }
   function drawHearts() {
     for (var i = 0; i < hearts.length; i++) {
@@ -1003,36 +1006,9 @@
     ctx.closePath();
   }
 
-  function drawTitleParade() {
-
-    var rx1 = W + 40 - ((time * 110) % (W + 120));
-    drawRoller(rx1, H * 0.62, -time * 5);
-    var hx = W + 40 - (((time * 80 + 1.1 * (W + 120)) % (W + 120)));
-    drawHopper(hx, H * 0.5 + Math.abs(Math.sin(time * 3)) * 18);
-    for (var i = 0; i < 3; i++) {
-      var sx = W + 30 - (((time * 60 + i * 140) % (W + 80)));
-      var sy = H * (0.28 + i * 0.13) + Math.sin(time * 2 + i) * 8;
-      ctx.save();
-      ctx.shadowColor = "#FFE45E"; ctx.shadowBlur = 10;
-      ctx.fillStyle = "#FFE45E"; drawStarShape(sx, sy, 7, time + i); ctx.fill();
-      ctx.fillStyle = "#FFF3A8"; drawStarShape(sx, sy, 3.5, time + i); ctx.fill();
-      ctx.restore();
-    }
-  }
-  function drawParadeShooter() {
-    var shx = W + 30 - ((time * 95) % (W + 100));
-    var shy = H * 0.46 + Math.sin(time * 2.4) * 14;
-    drawShooter(shx, shy);
-    var shp = (time % 1.4) / 1.4;
-    if (shp < 0.8) {
-      var px = shx - shp * 130, py = shy + shp * 40, al = 1 - shp * 1.15;
-      ctx.save(); ctx.globalAlpha = Math.max(0, al);
-      ctx.shadowColor = "#FF5DFF"; ctx.shadowBlur = 12;
-      ctx.fillStyle = "#FF5DFF"; ctx.beginPath(); ctx.arc(px, py, 5, 0, 6.2832); ctx.fill();
-      ctx.shadowBlur = 0;
-      ctx.fillStyle = "rgba(255,93,255,0.28)"; ctx.beginPath(); ctx.arc(px, py, 8, 0, 6.2832); ctx.fill();
-      ctx.restore(); ctx.globalAlpha = 1;
-    }
+  function cu(x, y, w, h) {
+    ctx.fillStyle = "rgba(36,22,79,.82)"; roundRect(x, y, w, h, 12); ctx.fill();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = "rgba(111,91,168,.45)"; roundRect(x, y, w, h, 12); ctx.stroke();
   }
   function drawTitle() {
 
@@ -1042,7 +1018,6 @@
     g.addColorStop(1, "rgba(18,10,45,0.30)");
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
 
-    drawTitleParade();
 
     ctx.textAlign = "center";
 
@@ -1071,7 +1046,6 @@
     ctx.font = "15px system-ui, sans-serif";
     ctx.fillText("hold longer = jump higher", W / 2, H * 0.8 + 26);
 
-    drawParadeShooter();
 
     ctx.textAlign = "left";
     ctx.globalAlpha = 0.8;
@@ -1225,10 +1199,12 @@
     ctx.shadowColor = "#D97FFF"; ctx.shadowBlur = 12;
     ctx.fillStyle = "#4A2A80"; ctx.beginPath(); ctx.arc(0, 0, 12, 0, 6.2832); ctx.fill();
     ctx.shadowBlur = 0;
-    ctx.fillStyle = "#7D4BD1"; ctx.beginPath(); ctx.arc(-3, -3, 5, 0, 6.2832); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(-10, 0); ctx.lineTo(-18, -6); ctx.lineTo(-12, 4); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = "#FFFFFF"; ctx.beginPath(); ctx.arc(2, 0, 4, 0, 6.2832); ctx.fill();
-    ctx.fillStyle = "#FF5DFF"; ctx.beginPath(); ctx.arc(2, 0, 2, 0, 6.2832); ctx.fill();
+    ctx.fillStyle = "#7D4BD1";
+    ctx.beginPath(); ctx.moveTo(-7, -3); ctx.bezierCurveTo(-22, -16, -32, -9, -30, 3); ctx.bezierCurveTo(-24, 11, -13, 8, -6, 5); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#9C6FE0"; ctx.beginPath(); ctx.arc(-4, -4, 5, 0, 6.2832); ctx.fill();
+    ctx.fillStyle = "#FFFFFF"; ctx.beginPath(); ctx.ellipse(3, -1, 5, 4.2, 0, 0, 6.2832); ctx.fill();
+    ctx.fillStyle = "#3A1A6B"; ctx.beginPath(); ctx.arc(5, 0, 2.3, 0, 6.2832); ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(5.6, -0.7, 0.8, 0, 6.2832); ctx.fill();
     ctx.restore();
   }
   function drawStorm(x, y, st, wx) {
