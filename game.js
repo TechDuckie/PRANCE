@@ -156,7 +156,12 @@
       var m = MEL[ph][s];
       if (m >= 0) mNote(mFreq(m), mNext, MSTEP * 0.95, "square", 0.7);
       var b = BASS[s];
-      if (b >= 0) mNote(mFreq(b) / 2, mNext, MSTEP * 0.95, "triangle", 0.5);
+      if (b >= 0) {
+        mNote(mFreq(b) / 2, mNext, MSTEP * 0.95, "triangle", 0.5);
+        mNote(mFreq(b) / 2, mNext, MSTEP * 1.9, "sine", 0.22);
+        mNote(mFreq(b + 7) / 2, mNext, MSTEP * 1.9, "sine", 0.16);
+      }
+      if (m >= 0 && s % 4 === 2) mNote(mFreq(m + 12), mNext, MSTEP * 0.5, "sine", 0.12);
       mNext += MSTEP; mStep++;
     }
   }
