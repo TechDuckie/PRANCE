@@ -1231,12 +1231,19 @@
     ctx.shadowColor = "#D97FFF"; ctx.shadowBlur = 12;
     ctx.fillStyle = "#4A2A80"; ctx.beginPath(); ctx.arc(0, 0, 12, 0, 6.2832); ctx.fill();
     ctx.shadowBlur = 0;
-    ctx.fillStyle = "#7D4BD1";
-    ctx.beginPath(); ctx.moveTo(-7, -3); ctx.bezierCurveTo(-22, -16, -32, -9, -30, 3); ctx.bezierCurveTo(-24, 11, -13, 8, -6, 5); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = "#9C6FE0"; ctx.beginPath(); ctx.arc(-4, -4, 5, 0, 6.2832); ctx.fill();
-    ctx.fillStyle = "#FFFFFF"; ctx.beginPath(); ctx.ellipse(3, -1, 5, 4.2, 0, 0, 6.2832); ctx.fill();
-    ctx.fillStyle = "#3A1A6B"; ctx.beginPath(); ctx.arc(5, 0, 2.3, 0, 6.2832); ctx.fill();
-    ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(5.6, -0.7, 0.8, 0, 6.2832); ctx.fill();
+    ctx.fillStyle = "#7D4BD1"; ctx.beginPath(); ctx.arc(0, 5, 7, 0, 6.2832); ctx.fill();
+    ctx.fillStyle = "#6335A8";
+    ctx.beginPath(); ctx.moveTo(-6, -2); ctx.bezierCurveTo(-20, -18, -34, -12, -33, 0); ctx.bezierCurveTo(-32, 6, -22, 8, -6, 4); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#5A2FA0";
+    ctx.beginPath(); ctx.moveTo(-5, 4); ctx.bezierCurveTo(-16, 10, -24, 16, -28, 22); ctx.bezierCurveTo(-20, 20, -12, 16, -5, 10); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = "#8A5CD6"; ctx.lineWidth = 2.5; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(-2, -11); ctx.quadraticCurveTo(-5, -19, -1, -22); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(3, -11); ctx.quadraticCurveTo(4, -19, 8, -20); ctx.stroke();
+    ctx.strokeStyle = "#B48CFF"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(2, -7); ctx.lineTo(8, -4); ctx.stroke();
+    ctx.fillStyle = "#FFFFFF"; ctx.beginPath(); ctx.ellipse(3, -1, 5.5, 4.6, 0, 0, 6.2832); ctx.fill();
+    ctx.fillStyle = "#3A1A6B"; ctx.beginPath(); ctx.arc(5, 0, 2.6, 0, 6.2832); ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(5.9, -0.8, 1, 0, 6.2832); ctx.fill();
     ctx.restore();
   }
   function drawStorm(x, y, st, wx) {
