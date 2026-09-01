@@ -1010,6 +1010,36 @@
     ctx.fillStyle = "rgba(36,22,79,.82)"; roundRect(x, y, w, h, 12); ctx.fill();
     ctx.lineWidth = 1.5; ctx.strokeStyle = "rgba(111,91,168,.45)"; roundRect(x, y, w, h, 12); ctx.stroke();
   }
+  function drawTitleParade() {
+    var rx1 = W + 40 - ((time * 110) % (W + 120));
+    drawRoller(rx1, H * 0.62, -time * 5);
+    var hx = W + 40 - (((time * 80 + 1.1 * (W + 120)) % (W + 120)));
+    drawHopper(hx, H * 0.5 + Math.abs(Math.sin(time * 3)) * 18);
+    for (var i = 0; i < 3; i++) {
+      var sx = W + 30 - (((time * 60 + i * 140) % (W + 80)));
+      var sy = H * (0.28 + i * 0.13) + Math.sin(time * 2 + i) * 8;
+      ctx.save();
+      ctx.shadowColor = "#FFE45E"; ctx.shadowBlur = 10;
+      ctx.fillStyle = "#FFE45E"; drawStarShape(sx, sy, 7, time + i); ctx.fill();
+      ctx.fillStyle = "#FFF3A8"; drawStarShape(sx, sy, 3.5, time + i); ctx.fill();
+      ctx.restore();
+    }
+  }
+  function drawParadeShooter() {
+    var shx = W + 30 - ((time * 95) % (W + 100));
+    var shy = H * 0.46 + Math.sin(time * 2.4) * 14;
+    drawShooter(shx, shy);
+    var shp = (time % 1.4) / 1.4;
+    if (shp < 0.8) {
+      var px = shx - shp * 130, py = shy + shp * 40, al = 1 - shp * 1.15;
+      ctx.save(); ctx.globalAlpha = Math.max(0, al);
+      ctx.shadowColor = "#FF5DFF"; ctx.shadowBlur = 12;
+      ctx.fillStyle = "#FF5DFF"; ctx.beginPath(); ctx.arc(px, py, 5, 0, 6.2832); ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = "rgba(255,93,255,0.28)"; ctx.beginPath(); ctx.arc(px, py, 8, 0, 6.2832); ctx.fill();
+      ctx.restore(); ctx.globalAlpha = 1;
+    }
+  }
   function drawTitle() {
 
     var g = ctx.createLinearGradient(0, 0, 0, H);
@@ -1018,6 +1048,7 @@
     g.addColorStop(1, "rgba(18,10,45,0.30)");
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
 
+    drawTitleParade();
 
     ctx.textAlign = "center";
 
@@ -1046,6 +1077,7 @@
     ctx.font = "15px system-ui, sans-serif";
     ctx.fillText("hold longer = jump higher", W / 2, H * 0.8 + 26);
 
+    drawParadeShooter();
 
     ctx.textAlign = "left";
     ctx.globalAlpha = 0.8;
