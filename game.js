@@ -1,4 +1,3 @@
-/* PRANCE 🦄🌈 — JS13kGames 2026. Procedural Canvas 2D, no assets. */
 (function () {
   "use strict";
   var LW = 360;
